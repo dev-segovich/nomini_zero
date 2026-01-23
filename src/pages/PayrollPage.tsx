@@ -88,23 +88,38 @@ const PayrollPage: React.FC = () => {
 				</div>
 			) : (
 				<div className="space-y-4">
-					{history.map((week) => (
-						<div
-							key={week.id}
-							onClick={() => setSelectedWeekForDetail(week)}
-							className="bg-charcoal p-8 rounded-3xl border border-white/5 flex justify-between items-center cursor-pointer hover:bg-white/5 transition-all"
-						>
-							<div>
-								<p className="text-titanium text-lg font-black">{week.label}</p>
-								<p className="text-[10px] font-black text-slate-500 uppercase">
-									{new Date(week.date).toLocaleDateString()}
-								</p>
-							</div>
-							<p className="text-emerald text-2xl font-black">
-								{formatCurrency(week.totalDisbursement)}
+					{history.filter((w) => w.type === currentCycleType).length === 0 ? (
+						<div className="bg-charcoal/30 p-12 rounded-[2.5rem] border border-dashed border-white/5 text-center flex flex-col items-center">
+							<span className="material-symbols-outlined text-4xl mb-3 text-slate-800">
+								folder_open
+							</span>
+							<p className="text-[10px] font-black uppercase tracking-widest text-slate-600">
+								No hay registros {currentCycleType}
 							</p>
 						</div>
-					))}
+					) : (
+						history
+							.filter((w) => w.type === currentCycleType)
+							.map((week) => (
+								<div
+									key={week.id}
+									onClick={() => setSelectedWeekForDetail(week)}
+									className="bg-charcoal p-8 rounded-3xl border border-white/5 flex justify-between items-center cursor-pointer hover:bg-white/5 transition-all"
+								>
+									<div>
+										<p className="text-titanium text-lg font-black">
+											{week.label}
+										</p>
+										<p className="text-[10px] font-black text-slate-500 uppercase">
+											{new Date(week.date).toLocaleDateString()}
+										</p>
+									</div>
+									<p className="text-emerald text-2xl font-black">
+										{formatCurrency(week.totalDisbursement)}
+									</p>
+								</div>
+							))
+					)}
 				</div>
 			)}
 		</div>

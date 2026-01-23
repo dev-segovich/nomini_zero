@@ -225,6 +225,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 		let totalDaysWorked = 0;
 		let totalPotentialDays = 0;
 
+		const isQuincenal = currentCycleType === "quincenal";
+		const frequencyMultiplier = isQuincenal ? 2.14 : 1;
+
 		employees.forEach((emp) => {
 			const status = emp.status || "Activo";
 			const dailyRate = emp.baseWeeklySalary / 5;
@@ -243,11 +246,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 			).length;
 
 			totalDaysWorked += weekdayWorkedCount + weekdayHolidayCount;
-			const basePay =
-				weekdayWorkedCount * dailyRate +
-				weekdayHolidayCount * dailyRate * 2 +
-				weekendWorkedCount * dailyRate * 2;
+
+			const theoreticalBase = emp.baseWeeklySalary * frequencyMultiplier;
+			const daysAbsent = 5 - (weekdayWorkedCount + weekdayHolidayCount);
+			const unpaidDaysAmount = Math.max(0, daysAbsent * dailyRate);
+			const holidayExtraPay =
+				(weekdayHolidayCount + weekendWorkedCount * 2) * dailyRate;
 			const extraPay = empExtraHours * extraHourRate;
+
+			const basePay =
+				status === "Suspendido"
+					? 0
+					: theoreticalBase - unpaidDaysAmount + holidayExtraPay;
+
 			totalPotentialDays += 5;
 
 			if (status === "Activo") {
@@ -269,8 +280,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 					(acc, p) => acc + p.weeklyInstallment,
 					0
 				);
-				total +=
-					basePay + extraPay + emp.weeklyBonus - loanDeduction - penalDeduction;
+				const empBonus =
+					status === "Suspendido" ? 0 : emp.weeklyBonus * frequencyMultiplier;
+
+				total += basePay + extraPay + empBonus - loanDeduction - penalDeduction;
 			} else if (status === "Suspendido") {
 				total += 0;
 			} else {
@@ -296,7 +309,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 					: 0,
 			turnoverRate,
 		};
-	}, [employees, attendance, loans, penalizations, extraHours]);
+	}, [
+		employees,
+		attendance,
+		loans,
+		penalizations,
+		extraHours,
+		currentCycleType,
+	]);
 
 	const handleAttendanceCycle = (empId: string, dayIdx: number) => {
 		setAttendance((prev) => {
@@ -457,9 +477,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 						l.remainingWeeks > 0
 				);
 				if (loanIdx !== -1) {
-					loanDeduction = updatedLoans[loanIdx].weeklyInstallment;
+					loanDeduction =
+						updatedLoans[loanIdx].weeklyInstallment * frequencyMultiplier;
 					if (isFinalizing) {
-						updatedLoans[loanIdx].remainingWeeks -= 1;
+						const weeksToSubtract = isQuincenal ? 2 : 1;
+						updatedLoans[loanIdx].remainingWeeks = Math.max(
+							0,
+							updatedLoans[loanIdx].remainingWeeks - weeksToSubtract
+						);
 						if (updatedLoans[loanIdx].remainingWeeks === 0)
 							updatedLoans[loanIdx].status = "paid";
 					}
@@ -471,9 +496,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 						p.status === "active" &&
 						p.remainingWeeks > 0
 					) {
-						penalDeduction += p.weeklyInstallment;
+						penalDeduction += p.weeklyInstallment * frequencyMultiplier;
 						if (isFinalizing) {
-							updatedPenalizations[idx].remainingWeeks -= 1;
+							const weeksToSubtract = isQuincenal ? 2 : 1;
+							updatedPenalizations[idx].remainingWeeks = Math.max(
+								0,
+								updatedPenalizations[idx].remainingWeeks - weeksToSubtract
+							);
 							if (updatedPenalizations[idx].remainingWeeks === 0)
 								updatedPenalizations[idx].status = "cleared";
 						}
@@ -487,7 +516,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 					? 0
 					: basePay +
 						extraHoursPay +
-						emp.weeklyBonus -
+						emp.weeklyBonus * frequencyMultiplier -
 						loanDeduction -
 						penalDeduction;
 
@@ -501,7 +530,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 				holidayExtraPay,
 				extraHoursCount: empExtraHours,
 				extraHoursPay,
-				bonus: status === "Suspendido" ? 0 : emp.weeklyBonus,
+				bonus:
+					status === "Suspendido" ? 0 : emp.weeklyBonus * frequencyMultiplier,
 				daysWorked: daysWorkedCount,
 				holidaysWorked: holidayWorkedCount + weekendWorkedCount,
 				weekendWorkedCount,
