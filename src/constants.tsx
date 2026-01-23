@@ -15,6 +15,7 @@ export const INITIAL_EMPLOYEES: Employee[] = [
 		avatarUrl:
 			"https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop",
 		status: "Activo",
+		paymentFrequency: "semanal",
 	},
 	{
 		id: "2",
@@ -28,6 +29,7 @@ export const INITIAL_EMPLOYEES: Employee[] = [
 		avatarUrl:
 			"https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop",
 		status: "Activo",
+		paymentFrequency: "semanal",
 	},
 ];
 
@@ -90,6 +92,7 @@ const generateMockHistory = (): PayrollWeek[] => {
 				bonus: emp.weeklyBonus,
 				daysWorked: daysWorked,
 				holidaysWorked: holidaysWorked,
+				dailyAttendance: Array(7).fill("worked"),
 				total: basePay + extraHoursPay + emp.weeklyBonus,
 			};
 		});
@@ -98,6 +101,7 @@ const generateMockHistory = (): PayrollWeek[] => {
 			id: generateId(),
 			date: weekDate.toISOString(),
 			label: `Semana ${9 - i}`,
+			type: "semanal",
 			summaries: summaries,
 			totalDisbursement: summaries.reduce((acc, s) => acc + s.total, 0),
 		});

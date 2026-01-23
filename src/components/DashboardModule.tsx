@@ -43,25 +43,28 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
 	const [showBonusModal, setShowBonusModal] = useState<string | null>(null);
 	const [bonusAmount, setBonusAmount] = useState(25);
 
-	const trendData = [
-		{ value: 4000 },
-		{ value: 4200 },
-		{ value: 3900 },
-		{ value: 4500 },
-		{ value: stats.total },
-		{ value: stats.total + 200 },
-	];
+	const trendData = useMemo(() => {
+		const points = history
+			.slice(-6)
+			.map((w) => ({ value: w.totalDisbursement }));
+		while (points.length < 6) {
+			points.unshift({ value: 0 });
+		}
+		// If current projection is worth adding as a 7th point:
+		points.push({ value: stats.total });
+		return points;
+	}, [history, stats.total]);
 
 	const performanceRanking = useMemo(() => {
 		return employees
 			.map((emp) => {
-				let totalDaysPossible = Math.max(1, history.length * 6);
+				let totalDaysPossible = Math.max(1, history.length * 5);
 				let totalDaysWorked = 0;
 				history.forEach((week) => {
 					const summary = week.summaries.find((s) => s.employeeId === emp.id);
 					if (summary) {
-						const dailyRate = emp.baseWeeklySalary / 6;
-						totalDaysWorked += Math.min(6, summary.basePay / (dailyRate || 1));
+						const dailyRate = emp.baseWeeklySalary / 5;
+						totalDaysWorked += Math.min(5, summary.basePay / (dailyRate || 1));
 					}
 				});
 				const attendanceRate = (totalDaysWorked / totalDaysPossible) * 100;
@@ -114,7 +117,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
 				</div>
 			</div>
 
-			<HRAgent employees={employees} stats={stats} />
+			{/* <HRAgent employees={employees} stats={stats} /> */}
 
 			{employeeOfMonth && (
 				<div className="bg-[#051126] border border-white/5 rounded-[2.5rem] p-6 sm:p-8 relative overflow-hidden group shadow-2xl">

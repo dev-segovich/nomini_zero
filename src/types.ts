@@ -37,6 +37,7 @@ export interface Employee {
 	hireDate: string;
 	avatarUrl: string;
 	status: EmployeeStatus;
+	paymentFrequency: "semanal" | "quincenal";
 }
 
 export interface Loan {
@@ -103,9 +104,11 @@ export interface FinalSummary {
 	bonus: number;
 	daysWorked: number;
 	holidaysWorked: number;
+	weekendWorkedCount?: number;
 	loanDeduction?: number;
 	penalizationDeduction?: number;
 	liquidation?: LiquidationDetails;
+	dailyAttendance?: DayStatus[];
 	total: number;
 }
 
@@ -113,6 +116,7 @@ export interface PayrollWeek {
 	id: string;
 	date: string;
 	label: string;
+	type: "semanal" | "quincenal";
 	summaries: FinalSummary[];
 	totalDisbursement: number;
 }

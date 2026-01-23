@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { toPng } from "html-to-image";
-import { DEPARTMENTS as INITIAL_DEPARTMENTS, MOCK_HISTORY } from "./constants";
 import {
 	Employee,
 	EmployeeStatus,
@@ -17,6 +16,7 @@ import {
 } from "./types";
 import departmentsService from "./services/departments.service";
 import employeesService from "./services/employees.service";
+import { payrollService } from "./services/payroll.service";
 import { EmployeeCard } from "./components/EmployeeCard";
 import { DashboardModule } from "./components/DashboardModule";
 import { EditEmployeeModal } from "./components/EditEmployeeModal";
@@ -68,6 +68,21 @@ const App: React.FC = () => {
 					setEmployees(data);
 				})
 				.catch((err) => console.error("Error fetching employees:", err));
+
+			payrollService
+				.getHistory()
+				.then((data) => setHistory(data))
+				.catch((err) => console.error("Error fetching payroll history:", err));
+
+			payrollService
+				.getLoans()
+				.then((data) => setLoans(data))
+				.catch((err) => console.error("Error fetching loans:", err));
+
+			payrollService
+				.getPenalizations()
+				.then((data) => setPenalizations(data))
+				.catch((err) => console.error("Error fetching penalizations:", err));
 		}
 	}, [user]);
 
@@ -79,6 +94,7 @@ const App: React.FC = () => {
 		string | null
 	>(null);
 	const [isAddingEmployee, setIsAddingEmployee] = useState(false);
+	const [isPreviewingWeek, setIsPreviewingWeek] = useState(false);
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 	const [settingsInitialView, setSettingsInitialView] = useState<
 		"main" | "departments" | "security" | "notifications"
@@ -87,6 +103,9 @@ const App: React.FC = () => {
 		useState<PayrollWeek | null>(null);
 	const [theme, setTheme] = useState<"light" | "dark">("dark");
 	const [isExporting, setIsExporting] = useState(false);
+	const [currentCycleType, setCurrentCycleType] = useState<
+		"semanal" | "quincenal"
+	>("semanal");
 
 	const [extraHours, setExtraHours] = useState<Record<string, number>>({});
 	const [suspensions, setSuspensions] = useState<SuspensionRecord>({});
@@ -154,7 +173,7 @@ const App: React.FC = () => {
 			const records: AttendanceRecord = {};
 			employees.forEach((emp) => {
 				const defaultWeek: DayStatus[] = weekDates.map((date, idx) => {
-					if (idx === 6) return "absent";
+					if (idx === 5 || idx === 6) return "absent";
 					if (isVenezuelanHoliday(date)) return "holiday";
 					return "worked";
 				});
@@ -164,7 +183,7 @@ const App: React.FC = () => {
 		}
 	}, [employees]);
 
-	const [history, setHistory] = useState<PayrollWeek[]>(MOCK_HISTORY);
+	const [history, setHistory] = useState<PayrollWeek[]>([]);
 
 	useEffect(() => {
 		if (notification) {
@@ -183,26 +202,31 @@ const App: React.FC = () => {
 		employees.forEach((emp) => {
 			const status = emp.status || "Activo";
 
-			const dailyRate = emp.baseWeeklySalary / 6;
-			const hourlyRate = dailyRate / 8;
-			const extraHourRate = hourlyRate * 1.5;
+			const dailyRate = emp.baseWeeklySalary / 5;
+			const extraHourRate = 2;
 			const empAttendance = attendance[emp.id] || Array(7).fill("absent");
 			const empExtraHours = extraHours[emp.id] || 0;
 
-			const basePay = empAttendance.reduce((acc, day) => {
-				if (day === "worked") {
-					totalDaysWorked++;
-					return acc + dailyRate;
-				}
-				if (day === "holiday") {
-					totalDaysWorked++;
-					return acc + dailyRate * 2;
-				}
-				return acc;
-			}, 0);
+			const weekdays = empAttendance.slice(0, 5);
+			const weekends = empAttendance.slice(5, 7);
+
+			const weekdayWorkedCount = weekdays.filter((d) => d === "worked").length;
+			const weekdayHolidayCount = weekdays.filter(
+				(d) => d === "holiday"
+			).length;
+			const weekendWorkedCount = weekends.filter(
+				(d) => d === "worked" || d === "holiday"
+			).length;
+
+			totalDaysWorked += weekdayWorkedCount + weekdayHolidayCount;
+
+			const basePay =
+				weekdayWorkedCount * dailyRate +
+				weekdayHolidayCount * dailyRate * 2 +
+				weekendWorkedCount * dailyRate * 2;
 
 			const extraPay = empExtraHours * extraHourRate;
-			totalPotentialDays += 6;
+			totalPotentialDays += 5;
 
 			if (status === "Activo") {
 				activeCount++;
@@ -274,6 +298,22 @@ const App: React.FC = () => {
 		}));
 	};
 
+	const handleUpdateBonus = async (empId: string, amount: number) => {
+		const emp = employees.find((e) => e.id === empId);
+		if (!emp) return;
+		try {
+			const updated = await employeesService.update(empId, {
+				...emp,
+				weeklyBonus: amount,
+			});
+			setEmployees((prev) => prev.map((e) => (e.id === empId ? updated : e)));
+			setNotification(`Bono de ${emp.fullName} actualizado.`);
+		} catch (err) {
+			console.error("Error updating bonus:", err);
+			setNotification("Error al actualizar bono.");
+		}
+	};
+
 	const handleStatusChange = async (
 		empId: string,
 		newStatus: EmployeeStatus
@@ -335,27 +375,40 @@ const App: React.FC = () => {
 		setSuspendingEmployeeId(null);
 	};
 
-	const finalizeWeek = () => {
+	const calculateCurrentPayroll = (
+		isFinalizing: boolean = false
+	): PayrollWeek => {
 		const updatedLoans = [...loans];
 		const updatedPenalizations = [...penalizations];
 
 		const finalSummaries: FinalSummary[] = employees.map((emp) => {
 			const status = emp.status || "Activo";
-			const theoreticalBase = emp.baseWeeklySalary;
-			const dailyRate = theoreticalBase / 6;
-			const hourlyRate = dailyRate / 8;
-			const extraHourRate = hourlyRate * 1.5;
 			const empAttendance = attendance[emp.id] || Array(7).fill("absent");
 			const empExtraHours = extraHours[emp.id] || 0;
 
-			const daysWorked = empAttendance.filter((d) => d === "worked").length;
-			const holidaysWorked = empAttendance.filter(
-				(d) => d === "holiday"
-			).length;
-			const daysAbsent = 6 - (daysWorked + holidaysWorked);
+			// Logic for weekly vs biweekly
+			const isQuincenal = currentCycleType === "quincenal";
+			const frequencyMultiplier = isQuincenal ? 2.14 : 1; // 15 days / 7 days approx
 
+			const theoreticalBase = emp.baseWeeklySalary * frequencyMultiplier;
+			const dailyRate = emp.baseWeeklySalary / 5; // Semanal de 5 días
+			const extraHourRate = 2; // Tarifa fija por hora extra
+
+			const weekdays = empAttendance.slice(0, 5);
+			const weekends = empAttendance.slice(5, 7);
+
+			const daysWorkedCount = weekdays.filter((d) => d === "worked").length;
+			const holidayWorkedCount = weekdays.filter((d) => d === "holiday").length;
+			const weekendWorkedCount = weekends.filter(
+				(d) => d === "worked" || d === "holiday"
+			).length;
+
+			const daysAbsent = 5 - (daysWorkedCount + holidayWorkedCount);
 			const unpaidDaysAmount = Math.max(0, daysAbsent * dailyRate);
-			const holidayExtraPay = holidaysWorked * dailyRate;
+
+			// Weekday holidays + Weekend work (all extra)
+			const holidayExtraPay =
+				(holidayWorkedCount + weekendWorkedCount * 2) * dailyRate;
 			const extraHoursPay = empExtraHours * extraHourRate;
 
 			const basePay =
@@ -385,9 +438,11 @@ const App: React.FC = () => {
 				);
 				if (loanIdx !== -1) {
 					loanDeduction = updatedLoans[loanIdx].weeklyInstallment;
-					updatedLoans[loanIdx].remainingWeeks -= 1;
-					if (updatedLoans[loanIdx].remainingWeeks === 0)
-						updatedLoans[loanIdx].status = "paid";
+					if (isFinalizing) {
+						updatedLoans[loanIdx].remainingWeeks -= 1;
+						if (updatedLoans[loanIdx].remainingWeeks === 0)
+							updatedLoans[loanIdx].status = "paid";
+					}
 				}
 
 				updatedPenalizations.forEach((p, idx) => {
@@ -397,9 +452,11 @@ const App: React.FC = () => {
 						p.remainingWeeks > 0
 					) {
 						penalDeduction += p.weeklyInstallment;
-						updatedPenalizations[idx].remainingWeeks -= 1;
-						if (updatedPenalizations[idx].remainingWeeks === 0)
-							updatedPenalizations[idx].status = "cleared";
+						if (isFinalizing) {
+							updatedPenalizations[idx].remainingWeeks -= 1;
+							if (updatedPenalizations[idx].remainingWeeks === 0)
+								updatedPenalizations[idx].status = "cleared";
+						}
 					}
 				});
 			}
@@ -425,30 +482,57 @@ const App: React.FC = () => {
 				extraHoursCount: empExtraHours,
 				extraHoursPay,
 				bonus: status === "Suspendido" ? 0 : emp.weeklyBonus,
-				daysWorked,
-				holidaysWorked,
+				daysWorked: daysWorkedCount,
+				holidaysWorked: holidayWorkedCount + weekendWorkedCount,
+				weekendWorkedCount,
 				loanDeduction: loanDeduction > 0 ? loanDeduction : undefined,
 				penalizationDeduction: penalDeduction > 0 ? penalDeduction : undefined,
 				liquidation: liq || undefined,
+				dailyAttendance: empAttendance,
 				total: Math.max(0, total),
 			};
 		});
 
-		const newWeek: PayrollWeek = {
+		return {
 			id: generateId(),
 			date: new Date().toISOString(),
-			label: `Semana ${history.length + 1}`,
+			label: `${currentCycleType === "semanal" ? "Semana" : "Quincena"} ${history.length + 1}`,
+			type: currentCycleType,
 			summaries: finalSummaries,
 			totalDisbursement: finalSummaries.reduce((acc, s) => acc + s.total, 0),
-		};
+			updatedLoans,
+			updatedPenalizations,
+		} as any;
+	};
 
-		setLoans(updatedLoans);
-		setPenalizations(updatedPenalizations);
-		setHistory((prev) => [...prev, newWeek]);
-		setExtraHours({});
-		if (notificationSettings.payroll)
-			setNotification("Ciclo cerrado exitosamente.");
-		setActiveTab("PAGOS");
+	const finalizeWeek = async () => {
+		try {
+			const result = calculateCurrentPayroll(true) as any;
+			const saved = await payrollService.createCycle(result);
+
+			// Refresh history and other states from backend result or just update locally
+			// Since createCycle returns the saved cycle, we add it to history
+			setHistory((prev) => [...prev, saved]);
+
+			// Result already has updated loans and penalizations local calculation
+			// But it's better to fetch fresh from backend to be sure
+			const updatedLoans = await payrollService.getLoans();
+			const updatedPenalizations = await payrollService.getPenalizations();
+
+			setLoans(updatedLoans);
+			setPenalizations(updatedPenalizations);
+
+			setExtraHours({});
+			setAttendance({}); // Reset attendance for new cycle
+			setIsPreviewingWeek(false); // Close the modal
+
+			if (notificationSettings.payroll)
+				setNotification("Ciclo cerrado exitosamente.");
+			setActiveTab("PAGOS");
+		} catch (err) {
+			console.error("Error finalizing week:", err);
+			setNotification("Error al cerrar ciclo semanal.");
+		}
 	};
 
 	const handleExportPNG = async (week: PayrollWeek) => {
@@ -697,16 +781,8 @@ const App: React.FC = () => {
 									<EmployeeCard
 										key={emp.id}
 										employee={emp}
-										attendance={attendance[emp.id] || Array(7).fill("absent")}
-										extraHours={extraHours[emp.id] || 0}
 										status={emp.status || "Activo"}
 										suspensionEndDate={suspensions[emp.id]}
-										onAttendanceChange={(idx) =>
-											handleAttendanceCycle(emp.id, idx)
-										}
-										onExtraHoursChange={(delta) =>
-											handleUpdateExtraHours(emp.id, delta)
-										}
 										onStatusChange={(s) => handleStatusChange(emp.id, s)}
 										onCardClick={() => setEditingEmployee(emp)}
 										onDelete={async (id) => {
@@ -723,12 +799,6 @@ const App: React.FC = () => {
 								))}
 							</div>
 						)}
-						<button
-							onClick={finalizeWeek}
-							className="fixed bottom-24 right-10 bg-emerald text-white px-10 py-6 rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl z-[100]"
-						>
-							Cerrar Ciclo Semanal
-						</button>
 					</div>
 				)}
 				{activeTab === "PAGOS" && (
@@ -736,42 +806,136 @@ const App: React.FC = () => {
 						<h2 className="text-4xl font-black text-titanium italic uppercase tracking-tighter">
 							Archivo de Pagos
 						</h2>
-						{history
-							.slice()
-							.reverse()
-							.map((week) => (
-								<div
-									key={week.id}
-									onClick={() => setSelectedWeekForDetail(week)}
-									className="bg-charcoal p-8 rounded-3xl border border-white/5 flex justify-between items-center cursor-pointer hover:bg-white/5 transition-all"
-								>
+
+						{/* SEMANA EN CURSO */}
+						<div className="flex flex-col gap-4">
+							<div className="flex justify-end gap-2 px-2">
+								{(["semanal", "quincenal"] as const).map((type) => (
+									<button
+										key={type}
+										onClick={() => setCurrentCycleType(type)}
+										className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${
+											currentCycleType === type
+												? "bg-electric text-white border-electric shadow-lg shadow-electric/20"
+												: "bg-white/5 text-slate-500 border-white/5 hover:border-white/10"
+										}`}
+									>
+										{type}
+									</button>
+								))}
+							</div>
+							<div
+								onClick={() => setIsPreviewingWeek(true)}
+								className="bg-electric/10 p-8 rounded-3xl border border-electric/30 flex justify-between items-center cursor-pointer hover:bg-electric/20 transition-all group"
+							>
+								<div className="flex items-center gap-6">
+									<div className="w-14 h-14 bg-electric rounded-2xl flex items-center justify-center text-white shadow-lg shadow-electric/30 group-hover:scale-110 transition-transform">
+										<span className="material-symbols-outlined text-3xl">
+											{currentCycleType === "semanal"
+												? "calendar_view_week"
+												: "calendar_month"}
+										</span>
+									</div>
 									<div>
-										<p className="text-titanium text-lg font-black">
-											{week.label}
+										<p className="text-electric text-xl font-black italic uppercase tracking-tighter">
+											{currentCycleType === "semanal"
+												? "Nómina Semanal"
+												: "Nómina Quincenal"}
 										</p>
-										<p className="text-[10px] font-black text-slate-500 uppercase">
-											{new Date(week.date).toLocaleDateString()}
+										<p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+											Ciclo en Curso - Editable
 										</p>
 									</div>
-									<p className="text-emerald text-2xl font-black">
-										{formatCurrency(week.totalDisbursement)}
+								</div>
+								<div className="text-right">
+									<p className="text-white text-2xl font-black italic font-mono">
+										{formatCurrency(
+											calculateCurrentPayroll().totalDisbursement
+										)}
+									</p>
+									<p className="text-[9px] font-black text-electric/60 uppercase">
+										Carga Proyectada ({currentCycleType})
 									</p>
 								</div>
-							))}
+							</div>
+						</div>
+
+						<div className="flex items-center gap-4 py-4">
+							<div className="h-px flex-1 bg-white/5"></div>
+							<span className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em]">
+								Historial de Ciclos
+							</span>
+							<div className="h-px flex-1 bg-white/5"></div>
+						</div>
+
+						{history.length === 0 ? (
+							<div className="bg-charcoal/50 p-16 rounded-[3rem] border border-dashed border-white/10 text-center flex flex-col items-center opacity-40 animate-pulse">
+								<span className="material-symbols-outlined text-6xl mb-4 text-slate-700">
+									history_toggle_off
+								</span>
+								<p className="text-xs font-black uppercase tracking-widest text-slate-500">
+									Archivo Vacío - No hay ciclos registrados
+								</p>
+								<p className="text-[9px] font-bold text-slate-700 uppercase mt-2 italic">
+									Los cierres finalizados aparecerán en esta sección
+								</p>
+							</div>
+						) : (
+							history
+								.slice()
+								.reverse()
+								.map((week) => (
+									<div
+										key={week.id}
+										onClick={() => setSelectedWeekForDetail(week)}
+										className="bg-charcoal p-8 rounded-3xl border border-white/5 flex justify-between items-center cursor-pointer hover:bg-white/5 transition-all"
+									>
+										<div>
+											<p className="text-titanium text-lg font-black">
+												{week.label}
+											</p>
+											<p className="text-[10px] font-black text-slate-500 uppercase">
+												{new Date(week.date).toLocaleDateString()}
+											</p>
+										</div>
+										<p className="text-emerald text-2xl font-black">
+											{formatCurrency(week.totalDisbursement)}
+										</p>
+									</div>
+								))
+						)}
 					</div>
 				)}
 				{activeTab === "PRESTAMOS" && (
 					<LoansModule
 						employees={employees}
 						loans={loans}
-						onAddLoan={(l) => setLoans((p) => [...p, l])}
+						onAddLoan={async (l) => {
+							try {
+								const saved = await payrollService.createLoan(l);
+								setLoans((p) => [...p, saved]);
+								setNotification("Préstamo registrado exitosamente.");
+							} catch (err) {
+								console.error("Error creating loan:", err);
+								setNotification("Error al registrar préstamo.");
+							}
+						}}
 					/>
 				)}
 				{activeTab === "PENALIZACION" && (
 					<PenalizationsModule
 						employees={employees}
 						penalizations={penalizations}
-						onAddPenalization={(p) => setPenalizations((prev) => [...prev, p])}
+						onAddPenalization={async (p) => {
+							try {
+								const saved = await payrollService.createPenalization(p);
+								setPenalizations((prev) => [...prev, saved]);
+								setNotification("Penalización registrada.");
+							} catch (err) {
+								console.error("Error creating penalization:", err);
+								setNotification("Error al registrar penalización.");
+							}
+						}}
 					/>
 				)}
 				{activeTab === "LIQUIDACION" && (
@@ -779,13 +943,26 @@ const App: React.FC = () => {
 				)}
 			</main>
 
-			{selectedWeekForDetail && (
+			{(selectedWeekForDetail || isPreviewingWeek) && (
 				<WeekDetailModal
-					week={selectedWeekForDetail}
+					week={selectedWeekForDetail || calculateCurrentPayroll()}
 					employees={employees}
 					isExporting={isExporting}
-					onClose={() => setSelectedWeekForDetail(null)}
-					onDownload={() => handleExportPNG(selectedWeekForDetail)}
+					onClose={() => {
+						setSelectedWeekForDetail(null);
+						setIsPreviewingWeek(false);
+					}}
+					onDownload={() =>
+						handleExportPNG(selectedWeekForDetail || calculateCurrentPayroll())
+					}
+					onAttendanceChange={
+						isPreviewingWeek ? handleAttendanceCycle : undefined
+					}
+					onExtraHoursChange={
+						isPreviewingWeek ? handleUpdateExtraHours : undefined
+					}
+					onBonusChange={isPreviewingWeek ? handleUpdateBonus : undefined}
+					onFinalize={isPreviewingWeek ? finalizeWeek : undefined}
 				/>
 			)}
 

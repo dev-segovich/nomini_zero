@@ -258,6 +258,30 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 
 						<div>
 							<label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+								Frecuencia de Pago
+							</label>
+							<div className="grid grid-cols-2 gap-3">
+								{(["semanal", "quincenal"] as const).map((f) => (
+									<button
+										key={f}
+										type="button"
+										onClick={() =>
+											setFormData({ ...formData, paymentFrequency: f })
+										}
+										className={`h-12 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+											formData.paymentFrequency === f
+												? "bg-electric text-white border-electric shadow-lg shadow-electric/20"
+												: "bg-white/5 text-slate-500 border-white/5 hover:border-white/20"
+										}`}
+									>
+										{f === "semanal" ? "Semanal" : "Quincenal"}
+									</button>
+								))}
+							</div>
+						</div>
+
+						<div>
+							<label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
 								Estado Laboral
 							</label>
 							<div className="grid grid-cols-2 gap-3">

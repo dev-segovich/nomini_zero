@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Employee, EmployeeStatus, DayStatus } from "../types";
+import { Employee, EmployeeStatus } from "../types";
 import { DAYS_SHORT, DEFAULT_AVATAR } from "../constants";
 import {
 	calculateLiquidation,
@@ -9,12 +9,8 @@ import {
 
 interface EmployeeCardProps {
 	employee: Employee;
-	attendance: DayStatus[];
-	extraHours: number;
 	status: EmployeeStatus;
 	suspensionEndDate?: string;
-	onAttendanceChange: (index: number) => void;
-	onExtraHoursChange: (delta: number) => void;
 	onStatusChange: (status: EmployeeStatus) => void;
 	onCardClick: () => void;
 	onDelete: (id: string) => void;
@@ -22,12 +18,8 @@ interface EmployeeCardProps {
 
 export const EmployeeCard: React.FC<EmployeeCardProps> = ({
 	employee,
-	attendance,
-	extraHours,
 	status,
 	suspensionEndDate,
-	onAttendanceChange,
-	onExtraHoursChange,
 	onStatusChange,
 	onCardClick,
 	onDelete,
@@ -35,27 +27,7 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
 	const [showContextMenu, setShowContextMenu] = useState(false);
 	const contextMenuRef = useRef<HTMLDivElement>(null);
 
-	const dailyRate = employee.baseWeeklySalary / 6;
-	const hourlyRate = dailyRate / 8;
-	const extraHourRate = hourlyRate * 1.5;
-
-	const basePay = attendance.reduce((acc, day) => {
-		if (day === "worked") return acc + dailyRate;
-		if (day === "holiday") return acc + dailyRate * 2;
-		return acc;
-	}, 0);
-
-	const extraPay = extraHours * extraHourRate;
-	const totalPayout =
-		status === "Suspendido" ? 0 : basePay + extraPay + employee.weeklyBonus;
-
 	const { years, months, days } = calculateSeniority(employee.hireDate);
-	const liquidation = calculateLiquidation(
-		employee.baseWeeklySalary,
-		employee.hireDate,
-		status,
-		basePay
-	);
 
 	useEffect(() => {
 		const handleClickOutside = (event: MouseEvent) => {
@@ -69,18 +41,6 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
 		document.addEventListener("mousedown", handleClickOutside);
 		return () => document.removeEventListener("mousedown", handleClickOutside);
 	}, []);
-
-	const getDayStyle = (dayStatus: DayStatus) => {
-		switch (dayStatus) {
-			case "worked":
-				return "bg-electric text-white shadow-lg shadow-electric/20";
-			case "holiday":
-				return "bg-rose-500 text-white shadow-lg shadow-rose-500/30 ring-2 ring-rose-400/50";
-			case "absent":
-			default:
-				return "bg-white/5 text-slate-600 border border-white/5 hover:text-slate-400";
-		}
-	};
 
 	return (
 		<div
@@ -234,114 +194,6 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
 					)}
 				</div>
 			</div>
-
-			{status === "Activo" || status === "Suspendido" ? (
-				<div className="mt-8 relative z-10 pt-6 border-t border-white/5 space-y-6">
-					<div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-						<div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-							{DAYS_SHORT.map((day, idx) => (
-								<button
-									key={idx}
-									onClick={(e) => {
-										e.stopPropagation();
-										if (status !== "Suspendido") onAttendanceChange(idx);
-									}}
-									className={`w-10 h-10 rounded-2xl flex items-center justify-center text-[11px] font-black transition-all active:scale-90 ${status === "Suspendido" ? "opacity-30 cursor-not-allowed grayscale" : getDayStyle(attendance[idx])}`}
-								>
-									{day}
-								</button>
-							))}
-						</div>
-
-						{status === "Suspendido" ? (
-							<div className="flex flex-col items-center bg-amber-500/10 p-3 rounded-2xl border border-amber-500/20 w-full sm:w-auto">
-								<div className="flex items-center gap-2 text-amber-500 mb-1">
-									<span className="material-symbols-outlined text-sm animate-spin-slow">
-										history
-									</span>
-									<p className="text-[10px] font-black uppercase tracking-widest">
-										Sanción Vigente
-									</p>
-								</div>
-								<p className="text-white text-xs font-bold font-mono">
-									Hasta:{" "}
-									{suspensionEndDate
-										? new Date(suspensionEndDate).toLocaleDateString()
-										: "Indefinido"}
-								</p>
-							</div>
-						) : (
-							<div className="flex items-center gap-3 bg-white/5 p-2 rounded-2xl border border-white/5">
-								<button
-									onClick={(e) => {
-										e.stopPropagation();
-										onExtraHoursChange(-1);
-									}}
-									className="w-8 h-8 rounded-xl bg-charcoal flex items-center justify-center text-slate-400 hover:text-white active:scale-90"
-								>
-									<span className="material-symbols-outlined text-sm">
-										remove
-									</span>
-								</button>
-								<div className="px-2 text-center min-w-[60px]">
-									<p className="text-[7px] font-black text-slate-500 uppercase leading-none mb-1">
-										H. Extras
-									</p>
-									<p className="text-white text-sm font-black italic">
-										{extraHours}h
-									</p>
-								</div>
-								<button
-									onClick={(e) => {
-										e.stopPropagation();
-										onExtraHoursChange(1);
-									}}
-									className="w-8 h-8 rounded-xl bg-electric flex items-center justify-center text-white active:scale-90 shadow-lg shadow-electric/20"
-								>
-									<span className="material-symbols-outlined text-sm">add</span>
-								</button>
-							</div>
-						)}
-					</div>
-
-					<div className="flex justify-between items-end">
-						<div className="text-left">
-							<p className="text-[9px] font-black text-slate-600 uppercase mb-1">
-								Costo H. Extra
-							</p>
-							<p className="text-slate-400 text-xs font-mono font-bold">
-								{formatCurrency(extraHourRate)}/h
-							</p>
-						</div>
-						<div className="text-right">
-							<p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">
-								Neto Semanal
-							</p>
-							<p
-								className={`text-3xl font-black tracking-tighter italic ${status === "Suspendido" ? "text-amber-500 animate-pulse" : "text-white"}`}
-							>
-								{formatCurrency(totalPayout)}
-							</p>
-						</div>
-					</div>
-				</div>
-			) : (
-				<div className="mt-8 p-6 rounded-[2rem] bg-crimson/5 border border-crimson/20 flex justify-between items-center relative z-10">
-					<div>
-						<p className="text-[10px] font-black text-crimson uppercase tracking-widest leading-none mb-1">
-							Liquidación Proyectada
-						</p>
-						<p className="text-crimson text-3xl font-black tracking-tighter italic">
-							{formatCurrency(liquidation?.total || 0)}
-						</p>
-					</div>
-					<div className="bg-crimson/20 w-12 h-12 rounded-2xl flex items-center justify-center text-crimson shadow-lg shadow-crimson/10">
-						<span className="material-symbols-outlined text-2xl font-bold">
-							receipt_long
-						</span>
-					</div>
-				</div>
-			)}
 		</div>
 	);
 };
