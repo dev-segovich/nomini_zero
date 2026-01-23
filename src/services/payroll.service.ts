@@ -3,30 +3,47 @@ import { PayrollWeek, Loan, Penalization } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3456";
 
+const getAuthHeader = () => {
+	const user = JSON.parse(localStorage.getItem("user") || "{}");
+	if (user && user.access_token) {
+		return { Authorization: `Bearer ${user.access_token}` };
+	}
+	return {};
+};
+
 export const payrollService = {
 	getHistory: async (): Promise<PayrollWeek[]> => {
-		const response = await axios.get(`${API_URL}/payroll`);
-		// Convert strings to dates/numbers if needed, though Axios mostly handles it
+		const response = await axios.get(`${API_URL}/payroll`, {
+			headers: getAuthHeader(),
+		});
 		return response.data;
 	},
 
 	createCycle: async (payload: any): Promise<PayrollWeek> => {
-		const response = await axios.post(`${API_URL}/payroll`, payload);
+		const response = await axios.post(`${API_URL}/payroll`, payload, {
+			headers: getAuthHeader(),
+		});
 		return response.data;
 	},
 
 	getLoans: async (): Promise<Loan[]> => {
-		const response = await axios.get(`${API_URL}/payroll/loans`);
+		const response = await axios.get(`${API_URL}/payroll/loans`, {
+			headers: getAuthHeader(),
+		});
 		return response.data;
 	},
 
 	createLoan: async (loan: Partial<Loan>): Promise<Loan> => {
-		const response = await axios.post(`${API_URL}/payroll/loans`, loan);
+		const response = await axios.post(`${API_URL}/payroll/loans`, loan, {
+			headers: getAuthHeader(),
+		});
 		return response.data;
 	},
 
 	getPenalizations: async (): Promise<Penalization[]> => {
-		const response = await axios.get(`${API_URL}/payroll/penalizations`);
+		const response = await axios.get(`${API_URL}/payroll/penalizations`, {
+			headers: getAuthHeader(),
+		});
 		return response.data;
 	},
 
@@ -35,7 +52,8 @@ export const payrollService = {
 	): Promise<Penalization> => {
 		const response = await axios.post(
 			`${API_URL}/payroll/penalizations`,
-			penalization
+			penalization,
+			{ headers: getAuthHeader() }
 		);
 		return response.data;
 	},

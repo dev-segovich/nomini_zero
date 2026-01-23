@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Employee, Loan } from "../types";
 import { formatCurrency, generateId } from "../utils";
+import { DEFAULT_AVATAR } from "../constants";
 
 interface LoansModuleProps {
 	employees: Employee[];
@@ -92,8 +93,8 @@ export const LoansModule: React.FC<LoansModuleProps> = ({
 										>
 											<div className="flex items-center gap-4 mb-6">
 												<img
-													src={emp?.avatarUrl}
-													className="w-12 h-12 rounded-xl object-cover border border-white/10"
+													src={emp?.avatarUrl || DEFAULT_AVATAR}
+													className="w-12 h-12 min-w-[3rem] min-h-[3rem] aspect-square rounded-xl object-cover border border-white/10"
 												/>
 												<div>
 													<p className="text-white text-sm font-black">

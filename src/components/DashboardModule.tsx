@@ -61,7 +61,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
 				let totalDaysPossible = Math.max(1, history.length * 5);
 				let totalDaysWorked = 0;
 				history.forEach((week) => {
-					const summary = week.summaries.find((s) => s.employeeId === emp.id);
+					const summary = week.summaries?.find((s) => s.employeeId === emp.id);
 					if (summary) {
 						const dailyRate = emp.baseWeeklySalary / 5;
 						totalDaysWorked += Math.min(5, summary.basePay / (dailyRate || 1));
@@ -109,12 +109,6 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
 						Strategic Human Capital Analytics
 					</p>
 				</div>
-				<div className="bg-white/5 px-4 py-2 rounded-xl border border-white/10 flex items-center gap-3">
-					<div className="w-1.5 h-1.5 bg-emerald rounded-full animate-pulse"></div>
-					<span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-						Vault Sync: OK
-					</span>
-				</div>
 			</div>
 
 			{/* <HRAgent employees={employees} stats={stats} /> */}
@@ -131,7 +125,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
 							<div className="w-32 h-32 rounded-[2rem] border-[3px] border-electric p-1 bg-charcoal">
 								<img
 									src={employeeOfMonth.avatarUrl || DEFAULT_AVATAR}
-									className="w-full h-full object-cover rounded-[1.6rem] grayscale group-hover:grayscale-0 transition-all duration-700"
+									className="w-full h-full min-w-[8rem] min-h-[8rem] aspect-square object-cover rounded-[1.6rem] grayscale group-hover:grayscale-0 transition-all duration-700"
 									alt="Employee of the month"
 								/>
 							</div>
@@ -180,16 +174,20 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
 									<p className="text-[7px] font-black text-slate-500 uppercase mb-0.5">
 										Conducta
 									</p>
-									<p className="text-emerald text-[9px] font-black uppercase italic leading-none">
-										Impecable
+									<p
+										className={`${employeeOfMonth.isClean ? "text-emerald" : "text-amber-500"} text-[9px] font-black uppercase italic leading-none`}
+									>
+										{employeeOfMonth.isClean ? "Impecable" : "Observado"}
 									</p>
 								</div>
 								<div className="bg-white/[0.03] border border-white/5 px-4 py-2 rounded-xl min-w-[80px]">
 									<p className="text-[7px] font-black text-slate-500 uppercase mb-0.5">
 										Créditos
 									</p>
-									<p className="text-emerald text-[9px] font-black uppercase italic leading-none">
-										Al Día
+									<p
+										className={`${employeeOfMonth.isFinanciallyHealthy ? "text-emerald" : "text-electric"} text-[9px] font-black uppercase italic leading-none`}
+									>
+										{employeeOfMonth.isFinanciallyHealthy ? "Al Día" : "Activo"}
 									</p>
 								</div>
 							</div>
@@ -245,13 +243,13 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({
 								<tr
 									key={item.id}
 									onClick={() => onEditEmployee(item)}
-									className={`bg-white/[0.01] hover:bg-white/[0.03] transition-colors cursor-pointer group/row ${idx === 0 ? "ring-1 ring-amber-500/20" : ""}`}
+									className={`bg-white/[0.01] hover:bg-white/[0.03] transition-colors cursor-pointer group/row`}
 								>
 									<td className="px-4 py-3 rounded-l-xl border-l border-t border-b border-white/5">
 										<div className="flex items-center gap-3">
 											<img
 												src={item.avatarUrl || DEFAULT_AVATAR}
-												className="w-7 h-7 rounded-lg object-cover grayscale group-hover/row:grayscale-0 transition-all"
+												className="w-7 h-7 min-w-[1.75rem] min-h-[1.75rem] aspect-square rounded-lg object-cover grayscale group-hover/row:grayscale-0 transition-all"
 											/>
 											<p className="text-white text-[10px] font-black">
 												{item.fullName}

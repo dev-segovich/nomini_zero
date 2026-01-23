@@ -1,5 +1,6 @@
 import { Employee, PayrollWeek, FinalSummary } from "./types";
 import { generateId } from "./utils";
+import defaultAvatar from "./assets/default.png";
 
 // Mapped to match backend Employee structure
 export const INITIAL_EMPLOYEES: Employee[] = [
@@ -33,8 +34,7 @@ export const INITIAL_EMPLOYEES: Employee[] = [
 	},
 ];
 
-export const DEFAULT_AVATAR =
-	"https://images.unsplash.com/photo-1633332755192-727a05c4013d?w=200&h=200&fit=crop";
+export const DEFAULT_AVATAR = defaultAvatar;
 
 export const DAYS_SHORT = ["L", "M", "M", "J", "V", "S", "D"];
 

@@ -38,6 +38,7 @@ export interface Employee {
 	avatarUrl: string;
 	status: EmployeeStatus;
 	paymentFrequency: "semanal" | "quincenal";
+	suspensionUntil?: string;
 }
 
 export interface Loan {

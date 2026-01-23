@@ -5,6 +5,7 @@ import {
 	formatCurrency,
 	calculateSeniority,
 } from "../utils";
+import { DEFAULT_AVATAR } from "../constants";
 
 interface LiquidationModuleProps {
 	employees: Employee[];
@@ -115,8 +116,8 @@ export const LiquidationModule: React.FC<LiquidationModuleProps> = ({
 								>
 									<div className="flex items-center gap-4">
 										<img
-											src={emp.avatarUrl}
-											className={`w-10 h-10 rounded-xl object-cover border border-white/10 ${isSelected ? "grayscale-0" : "grayscale"}`}
+											src={emp.avatarUrl || DEFAULT_AVATAR}
+											className={`w-10 h-10 min-w-[2.5rem] min-h-[2.5rem] aspect-square rounded-xl object-cover border border-white/10 ${isSelected ? "grayscale-0" : "grayscale"}`}
 										/>
 										<div className="flex-1 overflow-hidden">
 											<p

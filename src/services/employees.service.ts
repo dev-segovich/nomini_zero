@@ -11,7 +11,7 @@ const getAuthHeader = () => {
 };
 
 const cleanData = (data: any) => {
-	const { id, department, createdAt, updatedAt, ...rest } = data;
+	const { id, department, createdAt, updatedAt, userId, ...rest } = data;
 	return rest;
 };
 

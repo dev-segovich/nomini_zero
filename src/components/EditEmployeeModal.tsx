@@ -291,7 +291,16 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 									<button
 										key={s}
 										type="button"
-										onClick={() => setFormData({ ...formData, status: s })}
+										onClick={() =>
+											setFormData({
+												...formData,
+												status: s,
+												suspensionUntil:
+													s === "Suspendido"
+														? formData.suspensionUntil
+														: undefined,
+											})
+										}
 										className={`h-12 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
 											formData.status === s
 												? "bg-electric text-white border-electric shadow-lg shadow-electric/20"

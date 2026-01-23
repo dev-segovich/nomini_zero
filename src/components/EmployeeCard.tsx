@@ -14,6 +14,8 @@ interface EmployeeCardProps {
 	onStatusChange: (status: EmployeeStatus) => void;
 	onCardClick: () => void;
 	onDelete: (id: string) => void;
+	loanDebt?: number;
+	penalizationDebt?: number;
 }
 
 export const EmployeeCard: React.FC<EmployeeCardProps> = ({
@@ -23,6 +25,8 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
 	onStatusChange,
 	onCardClick,
 	onDelete,
+	loanDebt = 0,
+	penalizationDebt = 0,
 }) => {
 	const [showContextMenu, setShowContextMenu] = useState(false);
 	const contextMenuRef = useRef<HTMLDivElement>(null);
@@ -51,7 +55,7 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
 					? "bg-charcoal border-white/5"
 					: status === "Suspendido"
 						? "bg-charcoal border-amber-500/20"
-						: "bg-charcoal/40 border-crimson/20 grayscale"
+						: "bg-charcoal/40 border-crimson/20"
 			}`}
 			onClick={(e) => {
 				if (contextMenuRef.current?.contains(e.target as Node)) return;
@@ -63,16 +67,18 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
 			</div>
 
 			<div className="flex justify-between items-start relative z-30">
-				<div className="flex gap-5">
-					<div className="relative">
+				<div
+					className={`flex gap-5 ${status !== "Activo" && status !== "Suspendido" ? "grayscale opacity-60" : ""}`}
+				>
+					<div className="relative w-16 h-16 flex-shrink-0">
 						<img
 							src={employee.avatarUrl || DEFAULT_AVATAR}
 							alt={employee.fullName}
-							className={`w-16 h-16 rounded-[1.25rem] border border-white/10 object-cover shadow-inner ${status === "Suspendido" ? "grayscale-0" : ""}`}
+							className={`w-full h-full rounded-[1.25rem] border border-white/10 object-cover shadow-inner ${status === "Suspendido" ? "grayscale-0" : ""}`}
 						/>
 						{status !== "Activo" && (
 							<div
-								className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center border-2 border-charcoal ${status === "Suspendido" ? "bg-amber-500" : "bg-crimson"}`}
+								className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center border-2 border-charcoal shadow-lg ${status === "Suspendido" ? "bg-amber-500" : "bg-crimson"}`}
 							>
 								<span className="material-symbols-outlined text-[12px] text-white">
 									{status === "Suspendido" ? "pause" : "block"}
@@ -93,13 +99,75 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
 								{employee.department?.name}
 							</span>
 						</div>
-						<div className="mt-3 flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full w-fit border border-white/5">
-							<span className="material-symbols-outlined text-[14px] text-electric">
-								history
-							</span>
-							<span className="text-[10px] font-bold text-slate-300 uppercase tracking-tighter">
-								{years}a {months}m {days}d
-							</span>
+						<div className="mt-4 space-y-2">
+							<div className="flex flex-wrap items-center gap-2 w-[110%]">
+								<div className="flex-shrink-0 flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full w-fit border border-white/5 h-8">
+									<span className="material-symbols-outlined text-[14px] text-electric">
+										history
+									</span>
+									<span className="text-[10px] font-bold text-slate-300 uppercase tracking-tighter whitespace-nowrap">
+										{years}a {months}m {days}d
+									</span>
+								</div>
+
+								{loanDebt > 0 && (
+									<div className="flex-shrink-0 bg-electric/10 border border-electric/20 px-3 py-1 rounded-2xl flex items-center gap-2 h-8">
+										<span className="material-symbols-outlined text-[14px] text-electric">
+											payments
+										</span>
+										<div className="flex flex-col">
+											<span className="text-[7px] font-black text-electric uppercase tracking-[0.1em] leading-none whitespace-nowrap">
+												Préstamo
+											</span>
+											<span className="text-white text-[10px] font-black leading-tight whitespace-nowrap">
+												{formatCurrency(loanDebt)}
+											</span>
+										</div>
+									</div>
+								)}
+								{penalizationDebt > 0 && (
+									<div className="flex-shrink-0 bg-crimson/10 border border-crimson/20 px-3 py-1 rounded-2xl flex items-center gap-2 h-8">
+										<span className="material-symbols-outlined text-[14px] text-crimson">
+											gavel
+										</span>
+										<div className="flex flex-col">
+											<span className="text-[7px] font-black text-crimson uppercase tracking-[0.1em] leading-none whitespace-nowrap">
+												Sanción
+											</span>
+											<span className="text-white text-[10px] font-black leading-tight whitespace-nowrap">
+												{formatCurrency(penalizationDebt)}
+											</span>
+										</div>
+									</div>
+								)}
+
+								{loanDebt === 0 && penalizationDebt === 0 && (
+									<div className="flex-shrink-0 bg-emerald/10 border border-emerald/20 px-3 py-1 rounded-2xl flex items-center gap-2 h-8">
+										<span className="material-symbols-outlined text-[14px] text-emerald">
+											verified_user
+										</span>
+										<span className="text-white text-[10px] font-black uppercase tracking-widest whitespace-nowrap">
+											Solvente
+										</span>
+									</div>
+								)}
+							</div>
+
+							{status === "Suspendido" && suspensionEndDate && (
+								<div className="flex-shrink-0 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-2xl flex items-center gap-2 h-8 w-fit animate-slide-in">
+									<span className="material-symbols-outlined text-[14px] text-amber-500">
+										event_repeat
+									</span>
+									<div className="flex flex-col">
+										<span className="text-[7px] font-black text-amber-500 uppercase tracking-[0.1em] leading-none whitespace-nowrap">
+											Retorno
+										</span>
+										<span className="text-white text-[10px] font-black leading-tight whitespace-nowrap">
+											{new Date(suspensionEndDate).toLocaleDateString()}
+										</span>
+									</div>
+								</div>
+							)}
 						</div>
 					</div>
 				</div>
