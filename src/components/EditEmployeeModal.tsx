@@ -2,6 +2,7 @@ import React, { useState, useRef, useMemo } from "react";
 import { Employee, Loan, Penalization, DeptObj } from "../types";
 import { formatCurrency } from "../utils";
 import { DEFAULT_AVATAR } from "../constants";
+import { toast } from "sonner";
 import { 
 	compressImage, 
 	validateFileSize, 
@@ -51,14 +52,14 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 
 		// Validar tipo de archivo
 		if (!validateImageType(file)) {
-			alert("Por favor seleccione un archivo de imagen válido (JPG, PNG, GIF, WebP)");
+			toast.error("Por favor seleccione un archivo de imagen válido (JPG, PNG, GIF, WebP)");
 			e.target.value = "";
 			return;
 		}
 
 		// Validar tamaño (máximo 2MB antes de comprimir)
 		if (!validateFileSize(file, 2)) {
-			alert(
+			toast.error(
 				`La imagen es demasiado grande (${formatFileSize(file.size)}). ` +
 				`Por favor seleccione una imagen menor a 2MB.`
 			);
@@ -90,7 +91,7 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 
 		} catch (error) {
 			console.error("Error al comprimir la imagen:", error);
-			alert("Hubo un error al procesar la imagen. Por favor intente con otra imagen.");
+			toast.error("Hubo un error al procesar la imagen. Por favor intente con otra imagen.");
 			e.target.value = "";
 		} finally {
 			setIsCompressing(false);
@@ -403,7 +404,7 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 									!formData.position ||
 									!formData.departmentId
 								) {
-									alert("Por favor complete nombre, cargo y departamento.");
+									toast.warning("Por favor complete nombre, cargo y departamento.");
 									return;
 								}
 								onSave(formData);
