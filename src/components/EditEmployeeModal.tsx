@@ -2,6 +2,12 @@ import React, { useState, useRef, useMemo } from "react";
 import { Employee, Loan, Penalization, DeptObj } from "../types";
 import { formatCurrency } from "../utils";
 import { DEFAULT_AVATAR } from "../constants";
+import { 
+	compressImage, 
+	validateFileSize, 
+	validateImageType, 
+	formatFileSize 
+} from "../utils/imageCompression";
 
 interface EditEmployeeModalProps {
 	employee: Employee;
@@ -23,6 +29,7 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 	onClose,
 }) => {
 	const [formData, setFormData] = useState<Employee>({ ...employee });
+	const [isCompressing, setIsCompressing] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	// Cálculo de deudas acumuladas (no editables)
@@ -38,20 +45,64 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 		return { loanDebt, penalizationDebt };
 	}, [employee.id, loans, penalizations]);
 
-	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+	const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
-		if (file) {
-			const reader = new FileReader();
-			reader.onloadend = () => {
-				setFormData({ ...formData, avatarUrl: reader.result as string });
-			};
-			reader.readAsDataURL(file);
+		if (!file) return;
+
+		// Validar tipo de archivo
+		if (!validateImageType(file)) {
+			alert("Por favor seleccione un archivo de imagen válido (JPG, PNG, GIF, WebP)");
+			e.target.value = "";
+			return;
+		}
+
+		// Validar tamaño (máximo 2MB antes de comprimir)
+		if (!validateFileSize(file, 2)) {
+			alert(
+				`La imagen es demasiado grande (${formatFileSize(file.size)}). ` +
+				`Por favor seleccione una imagen menor a 2MB.`
+			);
+			e.target.value = "";
+			return;
+		}
+
+		try {
+			setIsCompressing(true);
+
+			// Comprimir imagen
+			const compressedBase64 = await compressImage(file, {
+				maxWidth: 800,
+				maxHeight: 800,
+				quality: 0.8,
+				outputFormat: 'image/jpeg'
+			});
+
+			// Actualizar estado con imagen comprimida
+			setFormData({ ...formData, avatarUrl: compressedBase64 });
+
+			// Mostrar información del tamaño reducido (opcional)
+			const originalSize = file.size;
+			const compressedSize = Math.round((compressedBase64.length * 3) / 4); // Aproximado
+			console.log(
+				`Imagen comprimida: ${formatFileSize(originalSize)} → ${formatFileSize(compressedSize)} ` +
+				`(${Math.round((1 - compressedSize / originalSize) * 100)}% reducción)`
+			);
+
+		} catch (error) {
+			console.error("Error al comprimir la imagen:", error);
+			alert("Hubo un error al procesar la imagen. Por favor intente con otra imagen.");
+			e.target.value = "";
+		} finally {
+			setIsCompressing(false);
 		}
 	};
 
 	const triggerFileInput = () => {
-		fileInputRef.current?.click();
+		if (!isCompressing) {
+			fileInputRef.current?.click();
+		}
 	};
+
 
 	return (
 		<div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
@@ -77,25 +128,41 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 						<div className="flex flex-col items-center gap-4 mb-4">
 							<div
 								onClick={triggerFileInput}
-								className="relative group cursor-pointer"
+								className={`relative group ${isCompressing ? 'cursor-wait' : 'cursor-pointer'}`}
 							>
-								<div className="w-24 h-24 rounded-3xl overflow-hidden border-2 border-white/10 group-hover:border-electric transition-all relative">
+								<div className={`w-24 h-24 rounded-3xl overflow-hidden border-2 ${
+									isCompressing 
+										? 'border-electric animate-pulse' 
+										: 'border-white/10 group-hover:border-electric'
+								} transition-all relative`}>
 									<img
 										src={formData.avatarUrl || DEFAULT_AVATAR}
-										className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+										className={`w-full h-full object-cover ${
+											isCompressing 
+												? 'opacity-50' 
+												: 'group-hover:scale-110'
+										} transition-transform duration-500`}
 										alt="Avatar"
 									/>
-									<div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-										<span className="material-symbols-outlined text-white text-3xl">
-											photo_camera
+									<div className={`absolute inset-0 ${
+										isCompressing 
+											? 'bg-black/60 opacity-100' 
+											: 'bg-black/40 opacity-0 group-hover:opacity-100'
+									} flex items-center justify-center transition-opacity`}>
+										<span className={`material-symbols-outlined text-white text-3xl ${
+											isCompressing ? 'animate-spin' : ''
+										}`}>
+											{isCompressing ? 'progress_activity' : 'photo_camera'}
 										</span>
 									</div>
 								</div>
-								<div className="absolute -bottom-2 -right-2 bg-electric w-8 h-8 rounded-xl flex items-center justify-center shadow-lg shadow-electric/40">
-									<span className="material-symbols-outlined text-white text-sm">
-										edit
-									</span>
-								</div>
+								{!isCompressing && (
+									<div className="absolute -bottom-2 -right-2 bg-electric w-8 h-8 rounded-xl flex items-center justify-center shadow-lg shadow-electric/40">
+										<span className="material-symbols-outlined text-white text-sm">
+											edit
+										</span>
+									</div>
+								)}
 							</div>
 							<input
 								type="file"
@@ -103,9 +170,17 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 								onChange={handleFileChange}
 								className="hidden"
 								accept="image/*"
+								disabled={isCompressing}
 							/>
-							<p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-								Toque la imagen para cambiar la foto
+							<p className="text-[9px] font-black text-slate-500 uppercase tracking-widest text-center">
+								{isCompressing 
+									? 'Procesando imagen...' 
+									: 'Toque la imagen para cambiar la foto'
+								}
+								<br />
+								<span className="text-[8px] text-slate-600">
+									(Máx. 2MB - JPG, PNG, GIF, WebP)
+								</span>
 							</p>
 						</div>
 
