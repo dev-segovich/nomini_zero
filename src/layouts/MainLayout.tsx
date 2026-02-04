@@ -15,7 +15,7 @@ export const MainLayout: React.FC = () => {
 		setSuspendingEmployeeId,
 		confirmSuspension,
 		isSettingsOpen,
-		setIsSettingsOpen, // Need to add this to context or keep local
+		setIsSettingsOpen,
 		departments,
 		setDepartments,
 		notificationSettings,

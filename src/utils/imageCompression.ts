@@ -3,17 +3,17 @@
  */
 
 export interface ImageCompressionOptions {
-  maxWidth?: number;
-  maxHeight?: number;
-  quality?: number;
-  outputFormat?: 'image/jpeg' | 'image/png' | 'image/webp';
+	maxWidth?: number;
+	maxHeight?: number;
+	quality?: number;
+	outputFormat?: "image/jpeg" | "image/png" | "image/webp";
 }
 
 const DEFAULT_OPTIONS: Required<ImageCompressionOptions> = {
-  maxWidth: 800,
-  maxHeight: 800,
-  quality: 0.8,
-  outputFormat: 'image/jpeg'
+	maxWidth: 800,
+	maxHeight: 800,
+	quality: 0.8,
+	outputFormat: "image/jpeg",
 };
 
 /**
@@ -23,78 +23,95 @@ const DEFAULT_OPTIONS: Required<ImageCompressionOptions> = {
  * @returns Promise con la imagen comprimida en base64
  */
 export const compressImage = async (
-  file: File,
-  options: ImageCompressionOptions = {}
+	file: File,
+	options: ImageCompressionOptions = {}
 ): Promise<string> => {
-  const opts = { ...DEFAULT_OPTIONS, ...options };
+	const opts = { ...DEFAULT_OPTIONS, ...options };
 
-  return new Promise((resolve, reject) => {
-    // Validar que sea un archivo de imagen
-    if (!file.type.startsWith('image/')) {
-      reject(new Error('El archivo debe ser una imagen'));
-      return;
-    }
+	return new Promise((resolve, reject) => {
+		// Validar que sea un archivo de imagen
+		if (!file.type.startsWith("image/")) {
+			reject(new Error("El archivo debe ser una imagen"));
+			return;
+		}
 
-    const reader = new FileReader();
-    
-    reader.onerror = () => {
-      reject(new Error('Error al leer el archivo'));
-    };
+		// Timeout de 30 segundos para evitar que se quede colgado
+		const timeout = setTimeout(() => {
+			reject(new Error("Tiempo de espera excedido al procesar la imagen"));
+		}, 30000);
 
-    reader.onload = (event) => {
-      const img = new Image();
-      
-      img.onerror = () => {
-        reject(new Error('Error al cargar la imagen'));
-      };
+		const reader = new FileReader();
 
-      img.onload = () => {
-        try {
-          // Calcular nuevas dimensiones manteniendo la proporción
-          let { width, height } = img;
-          
-          if (width > opts.maxWidth) {
-            height = (height * opts.maxWidth) / width;
-            width = opts.maxWidth;
-          }
-          
-          if (height > opts.maxHeight) {
-            width = (width * opts.maxHeight) / height;
-            height = opts.maxHeight;
-          }
+		reader.onerror = () => {
+			clearTimeout(timeout);
+			reject(new Error("Error al leer el archivo"));
+		};
 
-          // Crear canvas y dibujar imagen redimensionada
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
+		reader.onload = (event) => {
+			const img = new Image();
 
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            reject(new Error('No se pudo obtener el contexto del canvas'));
-            return;
-          }
+			img.onerror = () => {
+				clearTimeout(timeout);
+				reject(
+					new Error(
+						"Error al cargar la imagen. Asegúrese de que el archivo sea una imagen válida."
+					)
+				);
+			};
 
-          // Configurar calidad de renderizado
-          ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = 'high';
+			img.onload = () => {
+				try {
+					// Calcular nuevas dimensiones manteniendo la proporción
+					let { width, height } = img;
 
-          // Dibujar imagen
-          ctx.drawImage(img, 0, 0, width, height);
+					if (width > opts.maxWidth) {
+						height = (height * opts.maxWidth) / width;
+						width = opts.maxWidth;
+					}
 
-          // Convertir a base64 con compresión
-          const compressedBase64 = canvas.toDataURL(opts.outputFormat, opts.quality);
-          
-          resolve(compressedBase64);
-        } catch (error) {
-          reject(new Error(`Error al comprimir la imagen: ${error}`));
-        }
-      };
+					if (height > opts.maxHeight) {
+						width = (width * opts.maxHeight) / height;
+						height = opts.maxHeight;
+					}
 
-      img.src = event.target?.result as string;
-    };
+					// Crear canvas y dibujar imagen redimensionada
+					const canvas = document.createElement("canvas");
+					canvas.width = width;
+					canvas.height = height;
 
-    reader.readAsDataURL(file);
-  });
+					const ctx = canvas.getContext("2d");
+					if (!ctx) {
+						clearTimeout(timeout);
+						reject(new Error("No se pudo obtener el contexto del canvas"));
+						return;
+					}
+
+					// Configurar calidad de renderizado
+					ctx.imageSmoothingEnabled = true;
+					ctx.imageSmoothingQuality = "high";
+
+					// Dibujar imagen
+					ctx.drawImage(img, 0, 0, width, height);
+
+					// Convertir a base64 con compresión
+					const compressedBase64 = canvas.toDataURL(
+						opts.outputFormat,
+						opts.quality
+					);
+
+					clearTimeout(timeout);
+					resolve(compressedBase64);
+				} catch (error) {
+					clearTimeout(timeout);
+					reject(new Error(`Error al comprimir la imagen: ${error}`));
+				}
+			};
+
+			img.src = event.target?.result as string;
+		};
+
+		reader.readAsDataURL(file);
+	});
 };
 
 /**
@@ -103,9 +120,12 @@ export const compressImage = async (
  * @param maxSizeMB - Tamaño máximo en MB
  * @returns true si el archivo es válido, false en caso contrario
  */
-export const validateFileSize = (file: File, maxSizeMB: number = 5): boolean => {
-  const maxSizeBytes = maxSizeMB * 1024 * 1024;
-  return file.size <= maxSizeBytes;
+export const validateFileSize = (
+	file: File,
+	maxSizeMB: number = 50
+): boolean => {
+	const maxSizeBytes = maxSizeMB * 1024 * 1024;
+	return file.size <= maxSizeBytes;
 };
 
 /**
@@ -115,10 +135,15 @@ export const validateFileSize = (file: File, maxSizeMB: number = 5): boolean => 
  * @returns true si el tipo es válido, false en caso contrario
  */
 export const validateImageType = (
-  file: File,
-  allowedTypes: string[] = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+	file: File,
+	allowedTypes: string[] = [
+		"image/jpeg",
+		"image/png",
+		"image/gif",
+		"image/webp",
+	]
 ): boolean => {
-  return allowedTypes.includes(file.type);
+	return allowedTypes.includes(file.type);
 };
 
 /**
@@ -127,11 +152,11 @@ export const validateImageType = (
  * @returns Tamaño formateado (ej: "2.5 MB")
  */
 export const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) return '0 Bytes';
-  
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+	if (bytes === 0) return "0 Bytes";
+
+	const k = 1024;
+	const sizes = ["Bytes", "KB", "MB", "GB"];
+	const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+	return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 };

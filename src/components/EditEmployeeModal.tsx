@@ -2,6 +2,7 @@ import React, { useState, useRef, useMemo } from "react";
 import { Employee, Loan, Penalization, DeptObj } from "../types";
 import { formatCurrency } from "../utils";
 import { DEFAULT_AVATAR } from "../constants";
+import { compressImage } from "../utils/imageCompression";
 
 interface EditEmployeeModalProps {
 	employee: Employee;
@@ -77,14 +78,25 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 		return { loanDebt, penalizationDebt };
 	}, [employee.id, loans, penalizations]);
 
-	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+	const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
 		if (file) {
-			const reader = new FileReader();
-			reader.onloadend = () => {
-				setFormData({ ...formData, avatarUrl: reader.result as string });
-			};
-			reader.readAsDataURL(file);
+			try {
+				// Comprimir la imagen automáticamente (máximo 800x800, calidad 75%)
+				const compressedBase64 = await compressImage(file, {
+					maxWidth: 800,
+					maxHeight: 800,
+					quality: 0.75,
+					outputFormat: "image/jpeg",
+				});
+
+				setFormData({ ...formData, avatarUrl: compressedBase64 });
+			} catch (error) {
+				console.error("Error al procesar la imagen:", error);
+				alert(
+					"Hubo un error al procesar la imagen. Por favor intente con otra imagen."
+				);
+			}
 		}
 	};
 
