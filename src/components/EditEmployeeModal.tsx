@@ -23,6 +23,45 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 	onClose,
 }) => {
 	const [formData, setFormData] = useState<Employee>({ ...employee });
+
+	// Local state for display values to handle bi-weekly conversion smoothly
+	const getMultiplier = (freq: string | undefined) =>
+		freq === "quincenal" ? 2 : 1;
+
+	const [displaySalary, setDisplaySalary] = useState<string>(
+		(
+			(employee.baseWeeklySalary || 0) *
+			getMultiplier(employee.paymentFrequency)
+		).toFixed(2)
+	);
+	const [displayBonus, setDisplayBonus] = useState<string>(
+		(
+			(employee.weeklyBonus || 0) * getMultiplier(employee.paymentFrequency)
+		).toFixed(2)
+	);
+
+	const handleFrequencyChange = (freq: "semanal" | "quincenal") => {
+		const newMult = freq === "quincenal" ? 2 : 1;
+		// Update display values based on the current base values
+		setDisplaySalary(((formData.baseWeeklySalary || 0) * newMult).toFixed(2));
+		setDisplayBonus(((formData.weeklyBonus || 0) * newMult).toFixed(2));
+		setFormData((prev) => ({ ...prev, paymentFrequency: freq }));
+	};
+
+	const handleSalaryChange = (val: string) => {
+		setDisplaySalary(val);
+		const num = parseFloat(val) || 0;
+		const mult = getMultiplier(formData.paymentFrequency);
+		setFormData((prev) => ({ ...prev, baseWeeklySalary: num / mult }));
+	};
+
+	const handleBonusChange = (val: string) => {
+		setDisplayBonus(val);
+		const num = parseFloat(val) || 0;
+		const mult = getMultiplier(formData.paymentFrequency);
+		setFormData((prev) => ({ ...prev, weeklyBonus: num / mult }));
+	};
+
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	// Cálculo de deudas acumuladas (no editables)
@@ -219,43 +258,6 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 							</div>
 						</div>
 
-						<div className="grid grid-cols-2 gap-4">
-							<div>
-								<label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-									Salario Base Semanal ($)
-								</label>
-								<input
-									type="number"
-									placeholder="0.00"
-									value={formData.baseWeeklySalary || ""}
-									onChange={(e) =>
-										setFormData({
-											...formData,
-											baseWeeklySalary: parseFloat(e.target.value) || 0,
-										})
-									}
-									className="w-full bg-white/5 border border-white/10 rounded-xl h-12 px-4 text-white placeholder:text-slate-700 focus:ring-1 focus:ring-electric transition-all"
-								/>
-							</div>
-							<div>
-								<label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-									Bono Semanal ($)
-								</label>
-								<input
-									type="number"
-									placeholder="0.00"
-									value={formData.weeklyBonus || ""}
-									onChange={(e) =>
-										setFormData({
-											...formData,
-											weeklyBonus: parseFloat(e.target.value) || 0,
-										})
-									}
-									className="w-full bg-white/5 border border-white/10 rounded-xl h-12 px-4 text-white placeholder:text-slate-700 focus:ring-1 focus:ring-electric transition-all"
-								/>
-							</div>
-						</div>
-
 						<div>
 							<label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
 								Frecuencia de Pago
@@ -265,9 +267,7 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 									<button
 										key={f}
 										type="button"
-										onClick={() =>
-											setFormData({ ...formData, paymentFrequency: f })
-										}
+										onClick={() => handleFrequencyChange(f)}
 										className={`h-12 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
 											formData.paymentFrequency === f
 												? "bg-electric text-white border-electric shadow-lg shadow-electric/20"
@@ -280,38 +280,75 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 							</div>
 						</div>
 
-						<div>
-							<label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-								Estado Laboral
-							</label>
-							<div className="grid grid-cols-2 gap-3">
-								{(
-									["Activo", "Suspendido", "Despedido", "Renunció"] as const
-								).map((s) => (
-									<button
-										key={s}
-										type="button"
-										onClick={() =>
-											setFormData({
-												...formData,
-												status: s,
-												suspensionUntil:
-													s === "Suspendido"
-														? formData.suspensionUntil
-														: undefined,
-											})
-										}
-										className={`h-12 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
-											formData.status === s
-												? "bg-electric text-white border-electric shadow-lg shadow-electric/20"
-												: "bg-white/5 text-slate-500 border-white/5 hover:border-white/20"
-										}`}
-									>
-										{s}
-									</button>
-								))}
+						<div className="grid grid-cols-2 gap-4">
+							<div>
+								<label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+									Salario Base{" "}
+									{formData.paymentFrequency === "quincenal"
+										? "Quincenal"
+										: "Semanal"}{" "}
+									($)
+								</label>
+								<input
+									type="number"
+									placeholder="0.00"
+									value={displaySalary}
+									onChange={(e) => handleSalaryChange(e.target.value)}
+									className="w-full bg-white/5 border border-white/10 rounded-xl h-12 px-4 text-white placeholder:text-slate-700 focus:ring-1 focus:ring-electric transition-all"
+								/>
+							</div>
+							<div>
+								<label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+									Bono{" "}
+									{formData.paymentFrequency === "quincenal"
+										? "Quincenal"
+										: "Semanal"}{" "}
+									($)
+								</label>
+								<input
+									type="number"
+									placeholder="0.00"
+									value={displayBonus}
+									onChange={(e) => handleBonusChange(e.target.value)}
+									className="w-full bg-white/5 border border-white/10 rounded-xl h-12 px-4 text-white placeholder:text-slate-700 focus:ring-1 focus:ring-electric transition-all"
+								/>
 							</div>
 						</div>
+
+						{!isNew && (
+							<div>
+								<label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+									Estado Laboral
+								</label>
+								<div className="grid grid-cols-2 gap-3">
+									{(
+										["Activo", "Suspendido", "Despedido", "Renunció"] as const
+									).map((s) => (
+										<button
+											key={s}
+											type="button"
+											onClick={() =>
+												setFormData({
+													...formData,
+													status: s,
+													suspensionUntil:
+														s === "Suspendido"
+															? formData.suspensionUntil
+															: undefined,
+												})
+											}
+											className={`h-12 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+												formData.status === s
+													? "bg-electric text-white border-electric shadow-lg shadow-electric/20"
+													: "bg-white/5 text-slate-500 border-white/5 hover:border-white/20"
+											}`}
+										>
+											{s}
+										</button>
+									))}
+								</div>
+							</div>
+						)}
 					</div>
 
 					<div className="mt-10 flex gap-3">
@@ -323,14 +360,22 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 						</button>
 						<button
 							onClick={() => {
-								if (
-									!formData.fullName ||
-									!formData.position ||
-									!formData.departmentId
-								) {
-									alert("Por favor complete nombre, cargo y departamento.");
+								// Validation
+								const errors = [];
+								if (!formData.fullName?.trim()) errors.push("Nombre completo");
+								if (!formData.position?.trim()) errors.push("Cargo/Posición");
+								if (!formData.departmentId) errors.push("Departamento");
+								if (!formData.hireDate) errors.push("Fecha de ingreso");
+								if (!formData.paymentFrequency)
+									errors.push("Frecuencia de pago");
+
+								if (errors.length > 0) {
+									alert(
+										`Por favor complete los siguientes campos obligatorios:\n\n• ${errors.join("\n• ")}`
+									);
 									return;
 								}
+
 								onSave(formData);
 							}}
 							className="flex-1 h-14 rounded-xl bg-electric text-white font-black uppercase text-[10px] tracking-widest shadow-xl shadow-electric/20 hover:bg-electric-light transition-all"

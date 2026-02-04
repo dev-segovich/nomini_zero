@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Employee, EmployeeStatus } from "../types";
 import { DAYS_SHORT, DEFAULT_AVATAR } from "../constants";
 import {
@@ -29,7 +30,9 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
 	penalizationDebt = 0,
 }) => {
 	const [showContextMenu, setShowContextMenu] = useState(false);
+	const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
 	const contextMenuRef = useRef<HTMLDivElement>(null);
+	const buttonRef = useRef<HTMLButtonElement>(null);
 
 	const { years, months, days } = calculateSeniority(employee.hireDate);
 
@@ -49,7 +52,7 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
 	return (
 		<div
 			className={`transition-all duration-500 rounded-[2.5rem] p-7 group relative shadow-lg hover:shadow-2xl cursor-pointer border ${
-				showContextMenu ? "z-[50]" : "z-10"
+				showContextMenu ? "z-[9997] relative" : "z-10"
 			} ${
 				status === "Activo"
 					? "bg-charcoal border-white/5"
@@ -172,10 +175,18 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
 					</div>
 				</div>
 
-				<div className="relative" ref={contextMenuRef}>
+				<div className="relative">
 					<button
+						ref={buttonRef}
 						onClick={(e) => {
 							e.stopPropagation();
+							if (!showContextMenu && buttonRef.current) {
+								const rect = buttonRef.current.getBoundingClientRect();
+								setMenuPosition({
+									top: rect.bottom + 12,
+									right: window.innerWidth - rect.right,
+								});
+							}
 							setShowContextMenu(!showContextMenu);
 						}}
 						className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
@@ -189,77 +200,95 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
 						</span>
 					</button>
 
-					{showContextMenu && (
-						<div
-							className="absolute right-0 mt-3 w-60 bg-charcoal-lighter/95 border border-white/10 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-[100] overflow-hidden py-3 backdrop-blur-2xl animate-slide-in pointer-events-auto"
-							onClick={(e) => e.stopPropagation()}
-						>
-							<div className="px-5 py-2 mb-2">
-								<p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">
-									Gestión de Estado
-								</p>
-							</div>
-							{(
-								[
-									"Activo",
-									"Suspendido",
-									"Despedido",
-									"Renunció",
-								] as EmployeeStatus[]
-							).map((s) => (
-								<button
-									key={s}
-									onClick={(e) => {
-										e.stopPropagation();
-										onStatusChange(s);
-										setShowContextMenu(false);
-									}}
-									className={`w-full px-5 py-4 text-left text-sm font-bold flex items-center justify-between group/item transition-all ${
-										status === s
-											? "text-electric bg-electric/5"
-											: "text-slate-400 hover:bg-white/5 hover:text-white"
-									}`}
-								>
-									<div className="flex items-center gap-4">
-										<div
-											className={`w-2.5 h-2.5 rounded-full shadow-sm ${
-												s === "Activo"
-													? "bg-emerald shadow-emerald/50"
-													: s === "Suspendido"
-														? "bg-amber-500 shadow-amber-500/50"
-														: "bg-crimson shadow-crimson/50"
-											}`}
-										></div>
-										{s}
-									</div>
-									{status === s && (
-										<span className="material-symbols-outlined text-sm">
-											check_circle
-										</span>
-									)}
-								</button>
-							))}
+					{showContextMenu &&
+						createPortal(
+							<>
+								{/* Backdrop overlay */}
+								<div
+									className="fixed inset-0 bg-black/50 z-[9998]"
+									onClick={() => setShowContextMenu(false)}
+								/>
 
-							<div className="my-2 border-t border-white/5"></div>
-							<button
-								onClick={(e) => {
-									e.stopPropagation();
-									if (
-										confirm("¿Está seguro de que desea eliminar este registro?")
-									) {
-										onDelete(employee.id);
-									}
-									setShowContextMenu(false);
-								}}
-								className="w-full px-5 py-4 text-left text-sm font-bold flex items-center gap-4 text-crimson hover:bg-crimson/10 transition-all"
-							>
-								<span className="material-symbols-outlined text-xl">
-									delete
-								</span>
-								Eliminar Registro
-							</button>
-						</div>
-					)}
+								{/* Context Menu - positioned fixed to avoid parent overflow/z-index issues */}
+								<div
+									ref={contextMenuRef}
+									className="fixed w-60 bg-charcoal-lighter/95 border border-white/10 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-[9999] overflow-hidden pt-3 backdrop-blur-2xl animate-slide-in"
+									style={{
+										top: `${menuPosition.top}px`,
+										right: `${menuPosition.right}px`,
+									}}
+									onClick={(e) => e.stopPropagation()}
+								>
+									<div className="px-5 py-2 mb-2">
+										<p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">
+											Gestión de Estado
+										</p>
+									</div>
+									{(
+										[
+											"Activo",
+											"Suspendido",
+											"Despedido",
+											"Renunció",
+										] as EmployeeStatus[]
+									).map((s) => (
+										<button
+											key={s}
+											onClick={(e) => {
+												e.stopPropagation();
+												onStatusChange(s);
+												setShowContextMenu(false);
+											}}
+											className={`w-full px-5 py-4 text-left text-sm font-bold flex items-center justify-between group/item transition-all ${
+												status === s
+													? "text-electric bg-electric/5"
+													: "text-slate-400 hover:bg-white/5 hover:text-white"
+											}`}
+										>
+											<div className="flex items-center gap-4">
+												<div
+													className={`w-2.5 h-2.5 rounded-full shadow-sm ${
+														s === "Activo"
+															? "bg-emerald shadow-emerald/50"
+															: s === "Suspendido"
+																? "bg-amber-500 shadow-amber-500/50"
+																: "bg-crimson shadow-crimson/50"
+													}`}
+												></div>
+												{s}
+											</div>
+											{status === s && (
+												<span className="material-symbols-outlined text-sm">
+													check_circle
+												</span>
+											)}
+										</button>
+									))}
+
+									<div className="border-t border-white/5"></div>
+									<button
+										onClick={(e) => {
+											e.stopPropagation();
+											if (
+												confirm(
+													"¿Está seguro de que desea eliminar este registro?"
+												)
+											) {
+												onDelete(employee.id);
+											}
+											setShowContextMenu(false);
+										}}
+										className="w-full px-5 py-4 text-left text-sm font-bold flex items-center gap-4 text-crimson hover:bg-crimson/10 transition-all"
+									>
+										<span className="material-symbols-outlined text-xl">
+											delete
+										</span>
+										Eliminar Registro
+									</button>
+								</div>
+							</>,
+							document.body
+						)}
 				</div>
 			</div>
 		</div>
