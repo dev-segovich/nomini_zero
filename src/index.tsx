@@ -5,6 +5,8 @@ import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
 import { DataProvider } from "./context/DataContext";
 
+import { Toaster } from "sonner";
+
 const rootElement = document.getElementById("root");
 if (!rootElement) {
 	throw new Error("Could not find root element to mount to");
@@ -17,6 +19,7 @@ root.render(
 			<DataProvider>
 				<BrowserRouter>
 					<App />
+					<Toaster richColors position="top-center" theme="dark" />
 				</BrowserRouter>
 			</DataProvider>
 		</AuthProvider>
