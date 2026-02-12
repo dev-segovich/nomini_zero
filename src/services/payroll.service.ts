@@ -34,7 +34,9 @@ export const payrollService = {
 	},
 
 	createLoan: async (loan: Partial<Loan>): Promise<Loan> => {
-		const response = await axios.post(`${API_URL}/payroll/loans`, loan, {
+		const { id, ...loanData } = loan;
+
+		const response = await axios.post(`${API_URL}/payroll/loans`, loanData, {
 			headers: getAuthHeader(),
 		});
 		return response.data;
@@ -47,12 +49,14 @@ export const payrollService = {
 		return response.data;
 	},
 
-	createPenalization: async (
+	createPenalization: async (	
 		penalization: Partial<Penalization>
 	): Promise<Penalization> => {
+		const { id, ...penalizationData } = penalization;
+
 		const response = await axios.post(
 			`${API_URL}/payroll/penalizations`,
-			penalization,
+			penalizationData,
 			{ headers: getAuthHeader() }
 		);
 		return response.data;
