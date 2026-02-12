@@ -237,6 +237,21 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 
 						<div>
 							<label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+								Correo Electrónico
+							</label>
+							<input
+								type="email"
+								placeholder="Eje: juan.perez@empresa.com"
+								value={formData.email || ""}
+								onChange={(e) =>
+									setFormData({ ...formData, email: e.target.value })
+								}
+								className="w-full bg-white/5 border border-white/10 rounded-xl h-12 px-4 text-white placeholder:text-slate-700 focus:ring-1 focus:ring-electric transition-all"
+							/>
+						</div>
+
+						<div>
+							<label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
 								Cargo / Posición
 							</label>
 							<input

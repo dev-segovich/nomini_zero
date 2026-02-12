@@ -287,6 +287,7 @@ export const MainLayout: React.FC = () => {
 						editingEmployee || {
 							id: "",
 							fullName: "",
+							email: "",
 							position: "",
 							departmentId: "",
 							baseWeeklySalary: 0,

@@ -29,6 +29,7 @@ export interface NotificationSettings {
 export interface Employee {
 	id: string;
 	fullName: string;
+	email?: string;
 	position: string;
 	departmentId: string;
 	department?: DeptObj;
