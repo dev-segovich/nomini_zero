@@ -203,20 +203,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 	}, [suspensions, employees]);
 
 	useEffect(() => {
-		if (employees.length > 0) {
-			const weekDates = getCurrentWeekDates();
+		if (employees.length > 0 && isPreviewingWeek) {
+			const isQuincenal = currentCycleType === "quincenal";
+			const daysCount = isQuincenal ? 14 : 7;
+			const weekDates = getCurrentWeekDates(daysCount);
 			const records: AttendanceRecord = {};
 			employees.forEach((emp) => {
 				const defaultWeek: DayStatus[] = weekDates.map((date, idx) => {
-					if (idx === 5 || idx === 6) return "absent";
+					const dayInCycle = idx % 7;
+					if (dayInCycle === 5 || dayInCycle === 6) return "absent";
 					if (isVenezuelanHoliday(date)) return "holiday";
 					return "worked";
 				});
 				records[emp.id] = defaultWeek;
 			});
 			setAttendance(records);
+			// Reset extra hours when opening new payroll
+			setExtraHours({});
 		}
-	}, [employees]);
+	}, [employees, currentCycleType, isPreviewingWeek]);
 
 	const stats = useMemo(() => {
 		let total = 0;
@@ -226,77 +231,87 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 		let totalPotentialDays = 0;
 
 		const isQuincenal = currentCycleType === "quincenal";
-		const frequencyMultiplier = isQuincenal ? 2.14 : 1;
+		const frequencyMultiplier = isQuincenal ? 2 : 1;
 
-		employees.forEach((emp) => {
-			const status = emp.status || "Activo";
-			const dailyRate = emp.baseWeeklySalary / 5;
-			const extraHourRate = 2;
-			const empAttendance = attendance[emp.id] || Array(7).fill("absent");
-			const empExtraHours = extraHours[emp.id] || 0;
+		employees
+			.filter((e) => e.paymentFrequency === currentCycleType)
+			.filter((e) => (e.status || "Activo") === "Activo")
+			.forEach((emp) => {
+				const status = emp.status || "Activo";
+				const dailyRate = emp.baseWeeklySalary / 5;
+				const extraHourRate = 2;
+				const daysCount = isQuincenal ? 14 : 7;
+				const empAttendance =
+					attendance[emp.id] || Array(daysCount).fill("absent");
+				const empExtraHours = extraHours[emp.id] || 0;
 
-			const weekdays = empAttendance.slice(0, 5);
-			const dreams = empAttendance.slice(5, 7);
-			const weekdayWorkedCount = weekdays.filter((d) => d === "worked").length;
-			const weekdayHolidayCount = weekdays.filter(
-				(d) => d === "holiday"
-			).length;
-			const weekendWorkedCount = dreams.filter(
-				(d) => d === "worked" || d === "holiday"
-			).length;
+				const weekdays = empAttendance.filter((_, idx) => idx % 7 < 5);
+				const dreams = empAttendance.filter((_, idx) => idx % 7 >= 5);
+				const weekdayWorkedCount = weekdays.filter(
+					(d) => d === "worked" || d === "excused"
+				).length;
+				const weekdayHolidayCount = weekdays.filter(
+					(d) => d === "holiday"
+				).length;
+				const weekendWorkedCount = dreams.filter(
+					(d) => d === "worked" || d === "holiday"
+				).length;
 
-			totalDaysWorked += weekdayWorkedCount + weekdayHolidayCount;
+				totalDaysWorked += weekdayWorkedCount + weekdayHolidayCount;
 
-			const theoreticalBase = emp.baseWeeklySalary * frequencyMultiplier;
-			const daysAbsent = 5 - (weekdayWorkedCount + weekdayHolidayCount);
-			const unpaidDaysAmount = Math.max(0, daysAbsent * dailyRate);
-			const holidayExtraPay =
-				(weekdayHolidayCount + weekendWorkedCount * 2) * dailyRate;
-			const extraPay = empExtraHours * extraHourRate;
+				const theoreticalBase = emp.baseWeeklySalary * frequencyMultiplier;
+				const workDaysBase = isQuincenal ? 10 : 5;
+				const daysAbsent =
+					workDaysBase - (weekdayWorkedCount + weekdayHolidayCount);
+				const unpaidDaysAmount = Math.max(0, daysAbsent * dailyRate);
+				const holidayExtraPay =
+					(weekdayHolidayCount + weekendWorkedCount * 2) * dailyRate;
+				const extraPay = empExtraHours * extraHourRate;
 
-			const basePay =
-				status === "Suspendido"
-					? 0
-					: theoreticalBase - unpaidDaysAmount + holidayExtraPay;
+				const basePay =
+					status === "Suspendido"
+						? 0
+						: theoreticalBase - unpaidDaysAmount + holidayExtraPay;
 
-			totalPotentialDays += 5;
+				totalPotentialDays += isQuincenal ? 10 : 5;
 
-			if (status === "Activo") {
-				activeCount++;
-				const activeLoan = loans.find(
-					(l) =>
-						l.employeeId === emp.id &&
-						l.status === "active" &&
-						l.remainingWeeks > 0
-				);
-				const activePenalization = penalizations.filter(
-					(p) =>
-						p.employeeId === emp.id &&
-						p.status === "active" &&
-						p.remainingWeeks > 0
-				);
-				const loanDeduction = activeLoan ? activeLoan.weeklyInstallment : 0;
-				const penalDeduction = activePenalization.reduce(
-					(acc, p) => acc + p.weeklyInstallment,
-					0
-				);
-				const empBonus =
-					status === "Suspendido" ? 0 : emp.weeklyBonus * frequencyMultiplier;
+				if (status === "Activo") {
+					activeCount++;
+					const activeLoan = loans.find(
+						(l) =>
+							l.employeeId === emp.id &&
+							l.status === "active" &&
+							l.remainingWeeks > 0
+					);
+					const activePenalization = penalizations.filter(
+						(p) =>
+							p.employeeId === emp.id &&
+							p.status === "active" &&
+							p.remainingWeeks > 0
+					);
+					const loanDeduction = activeLoan ? activeLoan.weeklyInstallment : 0;
+					const penalDeduction = activePenalization.reduce(
+						(acc, p) => acc + p.weeklyInstallment,
+						0
+					);
+					const empBonus =
+						status === "Suspendido" ? 0 : emp.weeklyBonus * frequencyMultiplier;
 
-				total += basePay + extraPay + empBonus - loanDeduction - penalDeduction;
-			} else if (status === "Suspendido") {
-				total += 0;
-			} else {
-				inactiveCount++;
-				const liq = calculateLiquidation(
-					emp.baseWeeklySalary,
-					emp.hireDate,
-					status,
-					basePay
-				);
-				total += liq?.total || 0;
-			}
-		});
+					total +=
+						basePay + extraPay + empBonus - loanDeduction - penalDeduction;
+				} else if (status === "Suspendido") {
+					total += 0;
+				} else {
+					inactiveCount++;
+					const liq = calculateLiquidation(
+						emp.baseWeeklySalary,
+						emp.hireDate,
+						status,
+						basePay
+					);
+					total += liq?.total || 0;
+				}
+			});
 
 		const turnoverRate = (inactiveCount / (employees.length || 1)) * 100;
 
@@ -319,15 +334,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 	]);
 
 	const handleAttendanceCycle = (empId: string, dayIdx: number) => {
+		const isQuincenal = currentCycleType === "quincenal";
+		const daysCount = isQuincenal ? 14 : 7;
 		setAttendance((prev) => {
-			const current = [...(prev[empId] || Array(7).fill("absent"))];
+			const current = [...(prev[empId] || Array(daysCount).fill("absent"))];
 			const status = current[dayIdx];
 			let nextStatus: DayStatus =
 				status === "absent"
 					? "worked"
 					: status === "worked"
 						? "holiday"
-						: "absent";
+						: status === "holiday"
+							? "excused"
+							: "absent";
 			current[dayIdx] = nextStatus;
 			return { ...prev, [empId]: current };
 		});
@@ -425,123 +444,139 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 		const updatedLoans = [...loans];
 		const updatedPenalizations = [...penalizations];
 
-		const finalSummaries: any[] = employees.map((emp) => {
-			const status = emp.status || "Activo";
-			const empAttendance = attendance[emp.id] || Array(7).fill("absent");
-			const empExtraHours = extraHours[emp.id] || 0;
+		const finalSummaries: any[] = employees
+			.filter((e) => e.paymentFrequency === currentCycleType)
+			.filter((e) => (e.status || "Activo") === "Activo")
+			.map((emp) => {
+				const status = emp.status || "Activo";
 
-			const isQuincenal = currentCycleType === "quincenal";
-			const frequencyMultiplier = isQuincenal ? 2.14 : 1;
+				const isQuincenal = currentCycleType === "quincenal";
+				const frequencyMultiplier = isQuincenal ? 2 : 1;
+				const daysCount = isQuincenal ? 14 : 7;
 
-			const theoreticalBase = emp.baseWeeklySalary * frequencyMultiplier;
-			const dailyRate = emp.baseWeeklySalary / 5;
-			const extraHourRate = 2;
+				const empAttendance =
+					attendance[emp.id] || Array(daysCount).fill("absent");
+				const empExtraHours = extraHours[emp.id] || 0;
 
-			const weekdays = empAttendance.slice(0, 5);
-			const dreams = empAttendance.slice(5, 7);
+				// const isQuincenal = currentCycleType === "quincenal"; // Defined above in scope
+				// const frequencyMultiplier = isQuincenal ? 2.14 : 1; // Defined above in scope
 
-			const daysWorkedCount = weekdays.filter((d) => d === "worked").length;
-			const holidayWorkedCount = weekdays.filter((d) => d === "holiday").length;
-			const weekendWorkedCount = dreams.filter(
-				(d) => d === "worked" || d === "holiday"
-			).length;
+				const theoreticalBase = emp.baseWeeklySalary * frequencyMultiplier;
+				const dailyRate = emp.baseWeeklySalary / 5;
+				const extraHourRate = 2;
 
-			const daysAbsent = 5 - (daysWorkedCount + holidayWorkedCount);
-			const unpaidDaysAmount = Math.max(0, daysAbsent * dailyRate);
-			const holidayExtraPay =
-				(holidayWorkedCount + weekendWorkedCount * 2) * dailyRate;
-			const extraHoursPay = empExtraHours * extraHourRate;
+				const weekdays = empAttendance.filter((_, idx) => idx % 7 < 5);
+				const dreams = empAttendance.filter((_, idx) => idx % 7 >= 5);
 
-			const basePay =
-				status === "Suspendido"
-					? 0
-					: theoreticalBase - unpaidDaysAmount + holidayExtraPay;
-			const liq =
-				status === "Despedido" || status === "Renunció"
-					? calculateLiquidation(
-							emp.baseWeeklySalary,
-							emp.hireDate,
-							status,
-							basePay
-						)
-					: null;
+				const daysWorkedCount = weekdays.filter(
+					(d) => d === "worked" || d === "excused"
+				).length;
+				const holidayWorkedCount = weekdays.filter(
+					(d) => d === "holiday"
+				).length;
+				const weekendWorkedCount = dreams.filter(
+					(d) => d === "worked" || d === "holiday"
+				).length;
 
-			let loanDeduction = 0;
-			let penalDeduction = 0;
+				const workDaysBase = isQuincenal ? 10 : 5;
+				const daysAbsent =
+					workDaysBase - (daysWorkedCount + holidayWorkedCount);
+				const unpaidDaysAmount = Math.max(0, daysAbsent * dailyRate);
+				const holidayExtraPay =
+					(holidayWorkedCount + weekendWorkedCount * 2) * dailyRate;
+				const extraHoursPay = empExtraHours * extraHourRate;
 
-			if (status === "Activo") {
-				const loanIdx = updatedLoans.findIndex(
-					(l) =>
-						l.employeeId === emp.id &&
-						l.status === "active" &&
-						l.remainingWeeks > 0
-				);
-				if (loanIdx !== -1) {
-					loanDeduction =
-						updatedLoans[loanIdx].weeklyInstallment * frequencyMultiplier;
-					if (isFinalizing) {
-						const weeksToSubtract = isQuincenal ? 2 : 1;
-						updatedLoans[loanIdx].remainingWeeks = Math.max(
-							0,
-							updatedLoans[loanIdx].remainingWeeks - weeksToSubtract
-						);
-						if (updatedLoans[loanIdx].remainingWeeks === 0)
-							updatedLoans[loanIdx].status = "paid";
-					}
-				}
+				const basePay =
+					status === "Suspendido"
+						? 0
+						: theoreticalBase - unpaidDaysAmount + holidayExtraPay;
+				const liq =
+					status === "Despedido" || status === "Renunció"
+						? calculateLiquidation(
+								emp.baseWeeklySalary,
+								emp.hireDate,
+								status,
+								basePay
+							)
+						: null;
 
-				updatedPenalizations.forEach((p, idx) => {
-					if (
-						p.employeeId === emp.id &&
-						p.status === "active" &&
-						p.remainingWeeks > 0
-					) {
-						penalDeduction += p.weeklyInstallment * frequencyMultiplier;
+				let loanDeduction = 0;
+				let penalDeduction = 0;
+
+				if (status === "Activo") {
+					const loanIdx = updatedLoans.findIndex(
+						(l) =>
+							l.employeeId === emp.id &&
+							l.status === "active" &&
+							l.remainingWeeks > 0
+					);
+					if (loanIdx !== -1) {
+						loanDeduction =
+							updatedLoans[loanIdx].weeklyInstallment * frequencyMultiplier;
 						if (isFinalizing) {
 							const weeksToSubtract = isQuincenal ? 2 : 1;
-							updatedPenalizations[idx].remainingWeeks = Math.max(
+							updatedLoans[loanIdx].remainingWeeks = Math.max(
 								0,
-								updatedPenalizations[idx].remainingWeeks - weeksToSubtract
+								updatedLoans[loanIdx].remainingWeeks - weeksToSubtract
 							);
-							if (updatedPenalizations[idx].remainingWeeks === 0)
-								updatedPenalizations[idx].status = "cleared";
+							if (updatedLoans[loanIdx].remainingWeeks === 0)
+								updatedLoans[loanIdx].status = "paid";
 						}
 					}
-				});
-			}
 
-			const total = liq
-				? liq.total
-				: status === "Suspendido"
-					? 0
-					: basePay +
-						extraHoursPay +
-						emp.weeklyBonus * frequencyMultiplier -
-						loanDeduction -
-						penalDeduction;
+					updatedPenalizations.forEach((p, idx) => {
+						if (
+							p.employeeId === emp.id &&
+							p.status === "active" &&
+							p.remainingWeeks > 0
+						) {
+							penalDeduction += p.weeklyInstallment * frequencyMultiplier;
+							if (isFinalizing) {
+								const weeksToSubtract = isQuincenal ? 2 : 1;
+								updatedPenalizations[idx].remainingWeeks = Math.max(
+									0,
+									updatedPenalizations[idx].remainingWeeks - weeksToSubtract
+								);
+								if (updatedPenalizations[idx].remainingWeeks === 0)
+									updatedPenalizations[idx].status = "cleared";
+							}
+						}
+					});
+				}
 
-			return {
-				employeeId: emp.id,
-				name: emp.fullName,
-				department: emp.department?.name || "Logística",
-				basePay,
-				theoreticalBase,
-				unpaidDaysAmount,
-				holidayExtraPay,
-				extraHoursCount: empExtraHours,
-				extraHoursPay,
-				bonus:
-					status === "Suspendido" ? 0 : emp.weeklyBonus * frequencyMultiplier,
-				daysWorked: daysWorkedCount,
-				holidaysWorked: holidayWorkedCount + weekendWorkedCount,
-				weekendWorkedCount,
-				loanDeduction: loanDeduction > 0 ? loanDeduction : undefined,
-				penalizationDeduction: penalDeduction > 0 ? penalDeduction : undefined,
-				liquidation: liq || undefined,
-				dailyAttendance: empAttendance,
-				total: Math.max(0, total),
-			};
-		});
+				const total = liq
+					? liq.total
+					: status === "Suspendido"
+						? 0
+						: basePay +
+							extraHoursPay +
+							emp.weeklyBonus * frequencyMultiplier -
+							loanDeduction -
+							penalDeduction;
+
+				return {
+					employeeId: emp.id,
+					name: emp.fullName,
+					department: emp.department?.name || "Logística",
+					basePay,
+					theoreticalBase,
+					unpaidDaysAmount,
+					holidayExtraPay,
+					extraHoursCount: empExtraHours,
+					extraHoursPay,
+					bonus:
+						status === "Suspendido" ? 0 : emp.weeklyBonus * frequencyMultiplier,
+					daysWorked: daysWorkedCount,
+					holidaysWorked: holidayWorkedCount + weekendWorkedCount,
+					weekendWorkedCount,
+					loanDeduction: loanDeduction > 0 ? loanDeduction : undefined,
+					penalizationDeduction:
+						penalDeduction > 0 ? penalDeduction : undefined,
+					liquidation: liq || undefined,
+					dailyAttendance: empAttendance,
+					total: Math.max(0, total),
+				};
+			});
 
 		return {
 			id: generateId(),

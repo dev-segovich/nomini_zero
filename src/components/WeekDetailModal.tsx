@@ -12,6 +12,7 @@ interface WeekDetailModalProps {
 	onAttendanceChange?: (employeeId: string, dayIndex: number) => void;
 	onExtraHoursChange?: (employeeId: string, delta: number) => void;
 	onBonusChange?: (employeeId: string, amount: number) => void;
+	onEditEmployee?: (employee: Employee) => void;
 	onFinalize?: () => void;
 }
 
@@ -24,6 +25,7 @@ export const WeekDetailModal: React.FC<WeekDetailModalProps> = ({
 	onAttendanceChange,
 	onExtraHoursChange,
 	onBonusChange,
+	onEditEmployee,
 	onFinalize,
 }) => {
 	const getDayStyle = (dayStatus: DayStatus) => {
@@ -32,6 +34,8 @@ export const WeekDetailModal: React.FC<WeekDetailModalProps> = ({
 				return "bg-electric text-white shadow-lg shadow-electric/20";
 			case "holiday":
 				return "bg-rose-500 text-white shadow-lg shadow-rose-500/30 ring-2 ring-rose-400/50";
+			case "excused":
+				return "bg-emerald text-white shadow-lg shadow-emerald/20 ring-1 ring-emerald/30";
 			case "absent":
 			default:
 				return "bg-white/5 text-slate-600 border border-white/5 hover:text-slate-400";
@@ -158,12 +162,26 @@ export const WeekDetailModal: React.FC<WeekDetailModalProps> = ({
 									{/* Perfil */}
 									<div className="col-span-3">
 										<div className="flex items-center gap-4 mb-3">
-											<img
-												src={emp?.avatarUrl || DEFAULT_AVATAR}
-												className="w-10 h-10 rounded-xl object-cover grayscale border border-white/10"
-											/>
+											<div
+												className="relative group cursor-pointer"
+												onClick={() =>
+													emp && onEditEmployee && onEditEmployee(emp)
+												}
+											>
+												<img
+													src={emp?.avatarUrl || DEFAULT_AVATAR}
+													className="w-10 h-10 rounded-xl object-cover grayscale border border-white/10 group-hover:grayscale-0 transition-all"
+												/>
+												{onEditEmployee && (
+													<div className="absolute -bottom-1 -right-1 bg-electric w-4 h-4 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+														<span className="material-symbols-outlined text-white text-[10px]">
+															edit
+														</span>
+													</div>
+												)}
+											</div>
 											<div className="overflow-hidden">
-												<p className="text-white text-xs font-black truncate">
+												<p className="text-white text-xs font-black truncate flex items-center gap-2">
 													{s.name}
 												</p>
 												<p className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter truncate">
@@ -172,17 +190,19 @@ export const WeekDetailModal: React.FC<WeekDetailModalProps> = ({
 											</div>
 										</div>
 
-										{onAttendanceChange && s.dailyAttendance && (
-											<div className="flex gap-1 overflow-x-auto no-scrollbar pb-1">
+										{s.dailyAttendance && (
+											<div className="grid grid-cols-7 gap-1 w-fit">
 												{s.dailyAttendance.map((day, idx) => (
 													<button
 														key={idx}
 														onClick={() =>
+															onAttendanceChange &&
 															onAttendanceChange(s.employeeId, idx)
 														}
-														className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black transition-all active:scale-90 ${getDayStyle(day)}`}
+														disabled={!onAttendanceChange}
+														className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black transition-all ${onAttendanceChange ? "active:scale-90 cursor-pointer" : "cursor-default"} ${getDayStyle(day)}`}
 													>
-														{DAYS_SHORT[idx]}
+														{DAYS_SHORT[idx % 7]}
 													</button>
 												))}
 											</div>
@@ -204,7 +224,7 @@ export const WeekDetailModal: React.FC<WeekDetailModalProps> = ({
 												Faltas (
 												{Math.max(
 													0,
-													5 -
+													(week.type === "quincenal" ? 10 : 5) -
 														(s.daysWorked +
 															(s.holidaysWorked - (s.weekendWorkedCount || 0)))
 												)}
@@ -212,6 +232,13 @@ export const WeekDetailModal: React.FC<WeekDetailModalProps> = ({
 											</p>
 											<p className="text-sm font-black text-crimson/80 font-mono">
 												-{formatCurrency(s.unpaidDaysAmount || 0)}
+											</p>
+											<p className="text-[9px] text-slate-500 font-mono mt-0.5">
+												Día:{" "}
+												{formatCurrency(
+													s.theoreticalBase /
+														(week.type === "quincenal" ? 10 : 5)
+												)}
 											</p>
 										</div>
 										<div className="text-center">

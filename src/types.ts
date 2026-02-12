@@ -10,7 +10,7 @@ export type Department =
 	| "Seguridad"
 	| "Gerente"
 	| "Contabilidad";
-export type DayStatus = "worked" | "absent" | "holiday";
+export type DayStatus = "worked" | "absent" | "holiday" | "excused";
 
 export interface NotificationSettings {
 	loans: boolean;

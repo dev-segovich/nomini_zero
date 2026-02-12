@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
@@ -15,7 +15,7 @@ export const MainLayout: React.FC = () => {
 		setSuspendingEmployeeId,
 		confirmSuspension,
 		isSettingsOpen,
-		setIsSettingsOpen, // Need to add this to context or keep local
+		setIsSettingsOpen,
 		departments,
 		setDepartments,
 		notificationSettings,
@@ -47,6 +47,27 @@ export const MainLayout: React.FC = () => {
 	const [isAddingEmployee, setIsAddingEmployee] = useState(false);
 	const [editingEmployee, setEditingEmployee] = useState<any>(null);
 	const [isExporting, setIsExporting] = useState(false);
+	const [showNav, setShowNav] = useState(true);
+	const [lastScrollY, setLastScrollY] = useState(0);
+
+	// Hide/Show navigation based on scroll direction
+	useEffect(() => {
+		const handleScroll = () => {
+			const currentScrollY = window.scrollY;
+
+			// Show nav when scrolling up, hide when scrolling down
+			if (currentScrollY < lastScrollY || currentScrollY < 50) {
+				setShowNav(true);
+			} else if (currentScrollY > lastScrollY && currentScrollY > 100) {
+				setShowNav(false);
+			}
+
+			setLastScrollY(currentScrollY);
+		};
+
+		window.addEventListener("scroll", handleScroll, { passive: true });
+		return () => window.removeEventListener("scroll", handleScroll);
+	}, [lastScrollY]);
 
 	const tabs = [
 		{ id: "TABLERO", label: "TABLERO", path: "/", icon: "grid_view" },
@@ -251,6 +272,7 @@ export const MainLayout: React.FC = () => {
 						isPreviewingWeek ? handleUpdateExtraHours : undefined
 					}
 					onBonusChange={isPreviewingWeek ? handleUpdateBonus : undefined}
+					onEditEmployee={(emp) => setEditingEmployee(emp)}
 					onFinalize={
 						isPreviewingWeek
 							? async () => {
@@ -262,7 +284,9 @@ export const MainLayout: React.FC = () => {
 				/>
 			)}
 
-			<div className="fixed bottom-0 left-0 right-0 z-[180] px-6 pb-8 pt-4 pointer-events-none">
+			<div
+				className={`fixed bottom-0 left-0 right-0 z-[180] px-6 pb-8 pt-4 pointer-events-none transition-transform duration-300 ${showNav ? "translate-y-0" : "translate-y-full"}`}
+			>
 				<div className="max-w-4xl mx-auto bg-charcoal-darker/80 backdrop-blur-3xl border border-white/10 rounded-3xl shadow-2xl p-2 flex justify-between pointer-events-auto overflow-x-auto no-scrollbar">
 					{tabs.map((tab) => (
 						<button

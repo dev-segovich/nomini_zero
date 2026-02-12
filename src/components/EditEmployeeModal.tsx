@@ -2,13 +2,7 @@ import React, { useState, useRef, useMemo } from "react";
 import { Employee, Loan, Penalization, DeptObj } from "../types";
 import { formatCurrency } from "../utils";
 import { DEFAULT_AVATAR } from "../constants";
-import { toast } from "sonner";
-import { 
-	compressImage, 
-	validateFileSize, 
-	validateImageType, 
-	formatFileSize 
-} from "../utils/imageCompression";
+import { compressImage } from "../utils/imageCompression";
 
 interface EditEmployeeModalProps {
 	employee: Employee;
@@ -30,7 +24,45 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 	onClose,
 }) => {
 	const [formData, setFormData] = useState<Employee>({ ...employee });
-	const [isCompressing, setIsCompressing] = useState(false);
+
+	// Local state for display values to handle bi-weekly conversion smoothly
+	const getMultiplier = (freq: string | undefined) =>
+		freq === "quincenal" ? 2 : 1;
+
+	const [displaySalary, setDisplaySalary] = useState<string>(
+		(
+			(employee.baseWeeklySalary || 0) *
+			getMultiplier(employee.paymentFrequency)
+		).toFixed(2)
+	);
+	const [displayBonus, setDisplayBonus] = useState<string>(
+		(
+			(employee.weeklyBonus || 0) * getMultiplier(employee.paymentFrequency)
+		).toFixed(2)
+	);
+
+	const handleFrequencyChange = (freq: "semanal" | "quincenal") => {
+		const newMult = freq === "quincenal" ? 2 : 1;
+		// Update display values based on the current base values
+		setDisplaySalary(((formData.baseWeeklySalary || 0) * newMult).toFixed(2));
+		setDisplayBonus(((formData.weeklyBonus || 0) * newMult).toFixed(2));
+		setFormData((prev) => ({ ...prev, paymentFrequency: freq }));
+	};
+
+	const handleSalaryChange = (val: string) => {
+		setDisplaySalary(val);
+		const num = parseFloat(val) || 0;
+		const mult = getMultiplier(formData.paymentFrequency);
+		setFormData((prev) => ({ ...prev, baseWeeklySalary: num / mult }));
+	};
+
+	const handleBonusChange = (val: string) => {
+		setDisplayBonus(val);
+		const num = parseFloat(val) || 0;
+		const mult = getMultiplier(formData.paymentFrequency);
+		setFormData((prev) => ({ ...prev, weeklyBonus: num / mult }));
+	};
+
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	// Cálculo de deudas acumuladas (no editables)
@@ -48,62 +80,29 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 
 	const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
-		if (!file) return;
+		if (file) {
+			try {
+				// Comprimir la imagen automáticamente (máximo 800x800, calidad 75%)
+				const compressedBase64 = await compressImage(file, {
+					maxWidth: 800,
+					maxHeight: 800,
+					quality: 0.75,
+					outputFormat: "image/jpeg",
+				});
 
-		// Validar tipo de archivo
-		if (!validateImageType(file)) {
-			toast.error("Por favor seleccione un archivo de imagen válido (JPG, PNG, GIF, WebP)");
-			e.target.value = "";
-			return;
-		}
-
-		// Validar tamaño (máximo 2MB antes de comprimir)
-		if (!validateFileSize(file, 2)) {
-			toast.error(
-				`La imagen es demasiado grande (${formatFileSize(file.size)}). ` +
-				`Por favor seleccione una imagen menor a 2MB.`
-			);
-			e.target.value = "";
-			return;
-		}
-
-		try {
-			setIsCompressing(true);
-
-			// Comprimir imagen
-			const compressedBase64 = await compressImage(file, {
-				maxWidth: 800,
-				maxHeight: 800,
-				quality: 0.8,
-				outputFormat: 'image/jpeg'
-			});
-
-			// Actualizar estado con imagen comprimida
-			setFormData({ ...formData, avatarUrl: compressedBase64 });
-
-			// Mostrar información del tamaño reducido (opcional)
-			const originalSize = file.size;
-			const compressedSize = Math.round((compressedBase64.length * 3) / 4); // Aproximado
-			console.log(
-				`Imagen comprimida: ${formatFileSize(originalSize)} → ${formatFileSize(compressedSize)} ` +
-				`(${Math.round((1 - compressedSize / originalSize) * 100)}% reducción)`
-			);
-
-		} catch (error) {
-			console.error("Error al comprimir la imagen:", error);
-			toast.error("Hubo un error al procesar la imagen. Por favor intente con otra imagen.");
-			e.target.value = "";
-		} finally {
-			setIsCompressing(false);
+				setFormData({ ...formData, avatarUrl: compressedBase64 });
+			} catch (error) {
+				console.error("Error al procesar la imagen:", error);
+				alert(
+					"Hubo un error al procesar la imagen. Por favor intente con otra imagen."
+				);
+			}
 		}
 	};
 
 	const triggerFileInput = () => {
-		if (!isCompressing) {
-			fileInputRef.current?.click();
-		}
+		fileInputRef.current?.click();
 	};
-
 
 	return (
 		<div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
@@ -129,41 +128,25 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 						<div className="flex flex-col items-center gap-4 mb-4">
 							<div
 								onClick={triggerFileInput}
-								className={`relative group ${isCompressing ? 'cursor-wait' : 'cursor-pointer'}`}
+								className="relative group cursor-pointer"
 							>
-								<div className={`w-24 h-24 rounded-3xl overflow-hidden border-2 ${
-									isCompressing 
-										? 'border-electric animate-pulse' 
-										: 'border-white/10 group-hover:border-electric'
-								} transition-all relative`}>
+								<div className="w-24 h-24 rounded-3xl overflow-hidden border-2 border-white/10 group-hover:border-electric transition-all relative">
 									<img
 										src={formData.avatarUrl || DEFAULT_AVATAR}
-										className={`w-full h-full object-cover ${
-											isCompressing 
-												? 'opacity-50' 
-												: 'group-hover:scale-110'
-										} transition-transform duration-500`}
+										className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
 										alt="Avatar"
 									/>
-									<div className={`absolute inset-0 ${
-										isCompressing 
-											? 'bg-black/60 opacity-100' 
-											: 'bg-black/40 opacity-0 group-hover:opacity-100'
-									} flex items-center justify-center transition-opacity`}>
-										<span className={`material-symbols-outlined text-white text-3xl ${
-											isCompressing ? 'animate-spin' : ''
-										}`}>
-											{isCompressing ? 'progress_activity' : 'photo_camera'}
+									<div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+										<span className="material-symbols-outlined text-white text-3xl">
+											photo_camera
 										</span>
 									</div>
 								</div>
-								{!isCompressing && (
-									<div className="absolute -bottom-2 -right-2 bg-electric w-8 h-8 rounded-xl flex items-center justify-center shadow-lg shadow-electric/40">
-										<span className="material-symbols-outlined text-white text-sm">
-											edit
-										</span>
-									</div>
-								)}
+								<div className="absolute -bottom-2 -right-2 bg-electric w-8 h-8 rounded-xl flex items-center justify-center shadow-lg shadow-electric/40">
+									<span className="material-symbols-outlined text-white text-sm">
+										edit
+									</span>
+								</div>
 							</div>
 							<input
 								type="file"
@@ -171,17 +154,9 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 								onChange={handleFileChange}
 								className="hidden"
 								accept="image/*"
-								disabled={isCompressing}
 							/>
-							<p className="text-[9px] font-black text-slate-500 uppercase tracking-widest text-center">
-								{isCompressing 
-									? 'Procesando imagen...' 
-									: 'Toque la imagen para cambiar la foto'
-								}
-								<br />
-								<span className="text-[8px] text-slate-600">
-									(Máx. 2MB - JPG, PNG, GIF, WebP)
-								</span>
+							<p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+								Toque la imagen para cambiar la foto
 							</p>
 						</div>
 
@@ -310,43 +285,6 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 							</div>
 						</div>
 
-						<div className="grid grid-cols-2 gap-4">
-							<div>
-								<label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-									Salario Base Semanal ($)
-								</label>
-								<input
-									type="number"
-									placeholder="0.00"
-									value={formData.baseWeeklySalary || ""}
-									onChange={(e) =>
-										setFormData({
-											...formData,
-											baseWeeklySalary: parseFloat(e.target.value) || 0,
-										})
-									}
-									className="w-full bg-white/5 border border-white/10 rounded-xl h-12 px-4 text-white placeholder:text-slate-700 focus:ring-1 focus:ring-electric transition-all"
-								/>
-							</div>
-							<div>
-								<label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-									Bono Semanal ($)
-								</label>
-								<input
-									type="number"
-									placeholder="0.00"
-									value={formData.weeklyBonus || ""}
-									onChange={(e) =>
-										setFormData({
-											...formData,
-											weeklyBonus: parseFloat(e.target.value) || 0,
-										})
-									}
-									className="w-full bg-white/5 border border-white/10 rounded-xl h-12 px-4 text-white placeholder:text-slate-700 focus:ring-1 focus:ring-electric transition-all"
-								/>
-							</div>
-						</div>
-
 						<div>
 							<label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
 								Frecuencia de Pago
@@ -356,9 +294,7 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 									<button
 										key={f}
 										type="button"
-										onClick={() =>
-											setFormData({ ...formData, paymentFrequency: f })
-										}
+										onClick={() => handleFrequencyChange(f)}
 										className={`h-12 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
 											formData.paymentFrequency === f
 												? "bg-electric text-white border-electric shadow-lg shadow-electric/20"
@@ -371,38 +307,75 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 							</div>
 						</div>
 
-						<div>
-							<label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-								Estado Laboral
-							</label>
-							<div className="grid grid-cols-2 gap-3">
-								{(
-									["Activo", "Suspendido", "Despedido", "Renunció"] as const
-								).map((s) => (
-									<button
-										key={s}
-										type="button"
-										onClick={() =>
-											setFormData({
-												...formData,
-												status: s,
-												suspensionUntil:
-													s === "Suspendido"
-														? formData.suspensionUntil
-														: undefined,
-											})
-										}
-										className={`h-12 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
-											formData.status === s
-												? "bg-electric text-white border-electric shadow-lg shadow-electric/20"
-												: "bg-white/5 text-slate-500 border-white/5 hover:border-white/20"
-										}`}
-									>
-										{s}
-									</button>
-								))}
+						<div className="grid grid-cols-2 gap-4">
+							<div>
+								<label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+									Salario Base{" "}
+									{formData.paymentFrequency === "quincenal"
+										? "Quincenal"
+										: "Semanal"}{" "}
+									($)
+								</label>
+								<input
+									type="number"
+									placeholder="0.00"
+									value={displaySalary}
+									onChange={(e) => handleSalaryChange(e.target.value)}
+									className="w-full bg-white/5 border border-white/10 rounded-xl h-12 px-4 text-white placeholder:text-slate-700 focus:ring-1 focus:ring-electric transition-all"
+								/>
+							</div>
+							<div>
+								<label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+									Bono{" "}
+									{formData.paymentFrequency === "quincenal"
+										? "Quincenal"
+										: "Semanal"}{" "}
+									($)
+								</label>
+								<input
+									type="number"
+									placeholder="0.00"
+									value={displayBonus}
+									onChange={(e) => handleBonusChange(e.target.value)}
+									className="w-full bg-white/5 border border-white/10 rounded-xl h-12 px-4 text-white placeholder:text-slate-700 focus:ring-1 focus:ring-electric transition-all"
+								/>
 							</div>
 						</div>
+
+						{!isNew && (
+							<div>
+								<label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+									Estado Laboral
+								</label>
+								<div className="grid grid-cols-2 gap-3">
+									{(
+										["Activo", "Suspendido", "Despedido", "Renunció"] as const
+									).map((s) => (
+										<button
+											key={s}
+											type="button"
+											onClick={() =>
+												setFormData({
+													...formData,
+													status: s,
+													suspensionUntil:
+														s === "Suspendido"
+															? formData.suspensionUntil
+															: undefined,
+												})
+											}
+											className={`h-12 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+												formData.status === s
+													? "bg-electric text-white border-electric shadow-lg shadow-electric/20"
+													: "bg-white/5 text-slate-500 border-white/5 hover:border-white/20"
+											}`}
+										>
+											{s}
+										</button>
+									))}
+								</div>
+							</div>
+						)}
 					</div>
 
 					<div className="mt-10 flex gap-3">
@@ -414,14 +387,22 @@ export const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
 						</button>
 						<button
 							onClick={() => {
-								if (
-									!formData.fullName ||
-									!formData.position ||
-									!formData.departmentId
-								) {
-									toast.warning("Por favor complete nombre, cargo y departamento.");
+								// Validation
+								const errors = [];
+								if (!formData.fullName?.trim()) errors.push("Nombre completo");
+								if (!formData.position?.trim()) errors.push("Cargo/Posición");
+								if (!formData.departmentId) errors.push("Departamento");
+								if (!formData.hireDate) errors.push("Fecha de ingreso");
+								if (!formData.paymentFrequency)
+									errors.push("Frecuencia de pago");
+
+								if (errors.length > 0) {
+									alert(
+										`Por favor complete los siguientes campos obligatorios:\n\n• ${errors.join("\n• ")}`
+									);
 									return;
 								}
+
 								onSave(formData);
 							}}
 							className="flex-1 h-14 rounded-xl bg-electric text-white font-black uppercase text-[10px] tracking-widest shadow-xl shadow-electric/20 hover:bg-electric-light transition-all"
